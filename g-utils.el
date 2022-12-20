@@ -40,6 +40,41 @@
     (display-buffer (current-buffer))
     (set-window-point
      (get-buffer-window (current-buffer) 'visible)
-          (point-min))))
+     (point-min))))
+
+(defun g--split-params-string (string)
+  (with-temp-buffer
+    (c++-mode)
+    (insert (g--replace-list-of-pairs-in-string string
+                                                '(("\n" . "")
+                                                  (" +" . " ")
+                                                  ("^[^(]*(" . "")
+                                                  (")[^)]*$" . "")
+                                                  )))
+    (goto-char (point-min))
+    (let ((start-pt 1)
+          (output-list))
+      (while (re-search-forward "[(,<]" (point-max) t)
+        (cond ((string-equal (string (char-before)) "(")
+               (backward-char) (forward-sexp))
+              ((string-equal (string (char-before)) "<")
+               (backward-char) (forward-sexp))
+              ((string-equal (string (char-before)) ",")
+               (push (buffer-substring-no-properties start-pt (1- (point))) output-list)
+               (setq start-pt (point)))
+              )
+        )  ;; while
+      (nreverse output-list)
+      ) ;; let
+    )
+  )
+
+(defun g--c-defun-params ()
+  (save-excursion
+    (beginning-of-defun)
+    (re-search-forward "(\\([^()]+\\))[^)]*{")
+    (M (g--split-params-string (match-string 1)))
+    )
+  )
 
 (provide 'g-utils)

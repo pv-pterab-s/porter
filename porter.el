@@ -66,7 +66,7 @@ public:
 
   ;; copy "opencl driver" into "oneapi kernel"
   (message "copy opencl driver into oneapi kernel and display")
-  (with-current-buffer (find-file (g--oneapi-driver-fn))
+  (with-current-buffer (find-file-noselect (g--oneapi-driver-fn))
     (erase-buffer)
     (insert
      (with-current-buffer (find-file-noselect (g--opencl-driver-fn))
@@ -84,33 +84,32 @@ public:
   (setq g--arrayfire-dir arrayfire-dir)  ;; global defines target af clone (checking some things)
 
   ;; globally define target function to port (checking some things)
-  (let ((this-dir-name (file-name-nondirectory (directory-file-name (expand-file-name arrayfire-dir)))))
-    (unless (string-match "-af$" this-dir-name) (error "must run in arrayfire dir named with trailing \"-af\""))
+  (let ((this-dir-name (file-name-nondirectory
+                        (directory-file-name
+                         (expand-file-name arrayfire-dir)))))
+    (if (not (string-match "-af$" this-dir-name))
+        (error "must run in arrayfire dir named with trailing \"-af\""))
     (setq g--function-to-port (replace-regexp-in-string "-af$" "" this-dir-name)))
 
-  (message (concat "harnessed arrayfire at " g--arrayfire-dir " function " g--function-to-port))
+  (message (concat "harnessed arrayfire at " g--arrayfire-dir
+                   " function " g--function-to-port))
 
   ;; generate new oneapi driver file if missing from harnessed clone
   (if (or t (not (file-exists-p (g--oneapi-driver))))
-
       (progn
-
-        ;; oneapi, initially to be copy of opencl
+        ;; oneapi is copy of opencl driver
         (message "copying opencl driver into oneapi kernel")
-        (with-current-buffer (find-file-other-window (g--oneapi-driver-fn)) ; emacs to make copy so
-          (erase-buffer)                                       ; that undo is possible
+        (with-current-buffer (find-file-noselect (g--oneapi-driver-fn))
+          (erase-buffer)
           (insert
            (with-current-buffer (find-file-noselect (g--opencl-driver-fn))
              (buffer-string)))
 
-          ;;  automatically make global changes to driver. these are the only ones that do
-          ;;  not req. user input
+          ;; make non-user-input changes to oneapi driver
           (replace-regexp-in-region "opencl" "oneapi" (point-min) (point-max))
 
           )  ;; with-current-buffer
         ) ;; progn
-
-
     )  ;; if
   ) ;; defun
 
@@ -159,17 +158,26 @@ private:
     (save-restriction
       (narrow-to-defun)
       (let ((kernel-name )))))
+
   (concat
    "template<typename T>\n"
-   "class %sCreateKernel {\n"
+   "class " (c-defun-name) "CreateKernel {\n"
    "public:\n"
-   "    " (g--kernel-name) "CreateKernel(" (g--kernel-params) ") :" (g--kernel-params) "{}\n"
+   "    " (c-defun-name) "CreateKernel("
+   (mapconcat #'(lambda (s)
+                  (replace-regexp-in-string "\\(global +const\\|global\\)" "sycl::accessor<T, 1>" s))
+              (g--c-defun-params) ",")
+   ") :"
+   (mapconcat #'(lambda (s)
+
+                  )
+              (g--c-defun-params) "!!") " {}\n"
    "    void operator()(sycl::nd_item<2> it) const {\n"
    "        sycl::group g = it.get_group();\n\n"
-   "      "  (g--functor-body) "\n"
+   ;; "      "  (g--functor-body) "\n"
    "}\n"
    "private:\n"
-   (g--privates)
+   ;; (g--privates)
    "}\n"
    ) ;; concat
   ) ;; defun
@@ -179,11 +187,11 @@ private:
 (M (shell-command-to-string "cd ~/resize-af && git clean -dfx"))
 (g-harness-arrayfire "~/resize-af")
 (with-current-buffer (find-file-noselect "/home/gpryor/resize-af/src/backend/opencl/kernel/resize.cl")
-  (goto-char 4235)
+  (goto-char 3970)
 
   (gdp--display-string-other-window     ;; main
    (progn
-     (c-defun-name)
+     (g--functor-string)
      ;; (g-oneapi-port-defun)
      ;;   ^^ this is a string.
      )
