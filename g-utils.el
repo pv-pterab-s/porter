@@ -20,7 +20,7 @@
 
 ;;; Code:
 
-(defun M (s) (message "%s") s)
+(defun M (s) (message "%s" s) s)
 
 (defun g--replace-list-of-pairs-in-string (string pairs)
   (if (not pairs)
@@ -28,9 +28,18 @@
     (let* ((pair (car pairs))
            (regexp (car pair))
            (replacement (cdr pair)))
-      (g--replace-list-of-pairs-in-string
-       (replace-regexp-in-string regexp replacement string)
+      (g--replace-list-of-pairs-in-string-helper
+       (replace-regexp-in-string regexp replacement string t)
        (cdr pairs)))))
+
+;; (defun g--replace-list-of-pairs-in-string (string pairs)
+;;   (g--replace-list-of-pairs-in-string-helper
+;;    string
+;;    (seq-sort #'(lambda (pair-a pair-b)
+;;                  (< (length (car pair-a)) (length (car pair-b)))
+;;                  )
+;;              pairs)))
+
 
 ;; dev-loop
 (defun gdp--display-string-other-window (string)
@@ -40,7 +49,9 @@
     (display-buffer (current-buffer))
     (set-window-point
      (get-buffer-window (current-buffer) 'visible)
-     (point-min))))
+     (point-min))
+    string))
+
 
 (defun g--split-params-string (string)
   (with-temp-buffer
@@ -64,6 +75,7 @@
                (setq start-pt (point)))
               )
         )  ;; while
+      (push (buffer-substring-no-properties start-pt (point-max)) output-list)
       (nreverse output-list)
       ) ;; let
     )
@@ -73,7 +85,7 @@
   (save-excursion
     (beginning-of-defun)
     (re-search-forward "(\\([^()]+\\))[^)]*{")
-    (M (g--split-params-string (match-string 1)))
+    (g--split-params-string (match-string 1))
     )
   )
 

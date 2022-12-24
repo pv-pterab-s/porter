@@ -27,56 +27,6 @@
 (defun g--oneapi-driver-fn () (replace-regexp-in-string "opencl/" "oneapi/" (g--opencl-driver-fn)))
 
 
-;; C-c 1,2,3 switch between files
-(global-set-key (kbd "C-c 1") #'(lambda () (interactive) (find-file (g--oneapi-driver-fn))))
-(global-set-key (kbd "C-c 2") #'(lambda () (interactive) (find-file (g--opencl-kernel-fn))))
-(global-set-key (kbd "C-c 3") #'(lambda () (interactive) (find-file (g--opencl-driver-fn))))
-
-
-(defun g--functor ()   ;; generate functor from kernel at point
-  (let ((kernel-name "")
-        (params ""))
-  (format "
-template<typename T>
-class " kernel-name "CreateKernel {
-public:
-  " kernel-name "CreateKernel(" kernel-params ") : %s {}
-  void operator()(sycl::nd_item<2> it) const {
-    sycl::group g = it.get_group();
-    %s
-  }
-;; private:
-;;   %s
-;; };
-;; "
-  )))
-
-
-(defun M (s) (message "%s" s) s)
-(with-current-buffer (find-file-noselect "/home/gpryor/resize-af/src/backend/opencl/kernel/resize.cl")
-  (goto-char 949)  ;; assume in a kernel
-
-  ) ;; with-current-buffer
-
-
-(defun g--gen-oneapi-driver ()
-  ;; (interactive)
-  (if (not (boundp 'g--arrayfire-dir))
-      (error "you must harness an arrayfire directory first"))
-
-  ;; copy "opencl driver" into "oneapi kernel"
-  (message "copy opencl driver into oneapi kernel and display")
-  (with-current-buffer (find-file-noselect (g--oneapi-driver-fn))
-    (erase-buffer)
-    (insert
-     (with-current-buffer (find-file-noselect (g--opencl-driver-fn))
-       (buffer-string))))
-
-  ;; generate a functor for each kernel in the opencl kernel
-
-  ) ;; defun
-
-
 (defun g-harness-arrayfire (arrayfire-dir)
   (interactive "Denter arrayfire clone directory: ")
 
@@ -107,44 +57,26 @@ public:
 
           ;; make non-user-input changes to oneapi driver
           (replace-regexp-in-region "opencl" "oneapi" (point-min) (point-max))
+          (goto-char (point-min))
+          (re-search-forward "namespace kernel {")
+          (insert "
+
+template<typename T>
+using local_accessor = sycl::accessor<T, 1, sycl::access::mode::read_write,
+                                      sycl::access::target::local>;
+template<typename T>
+using read_accessor = sycl::accessor<T, 1, sycl::access::mode::read>;
+template<typename T>
+using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
+")
 
           )  ;; with-current-buffer
         ) ;; progn
     )  ;; if
+
+  ;; (find-file-other-window (g--oneapi-driver-fn))
+
   ) ;; defun
-
-
-(defun gdp--functor-string-old ()
-  (with-output-to-string
-    (princ (format "
-template<typename T>
-class %sCreateKernel {
-public:
-  %sCreateKernel(%s) : %s {}
-  void operator()(sycl::nd_item<2> it) const {
-    sycl::group g = it.get_group();
-    %s
-  }
-private:
-  %s
-};
-"
-                   (gdp--name-of-kernel-at-point)
-                   (gdp--name-of-kernel-at-point)
-                   (gdp--oneapi-params-from-kernel-params (gdp--params-of-kernel-at-point))
-                   (gdp--constructor-assigns-from-kernel-params (gdp--params-of-kernel-at-point))
-                   (gdp--underscore-privates
-                    (gdp--oneapi-body-from-opencl-body
-                     (gdp--oneapi-params-from-kernel-params (gdp--params-of-kernel-at-point))
-                     (gdp--body-of-kernel-at-point))
-                    (gdp--names-from-params (gdp--params-of-kernel-at-point)))
-                   (gdp--privates-from-kernel-params (gdp--params-of-kernel-at-point))
-                   ))))
-
-(defun g--kernel-name () )
-(defun g--kernel-params () )
-(defun g--kernel-params () )
-(defun g--functor-body () )
 
 (defun g--functor-string ()
   (if (not  ;; don't let this function run from a confusing place
@@ -154,48 +86,204 @@ private:
               (looking-at "^kernel"))))
       (error "must run from within an opencl kernel"))
 
-  (save-excursion
-    (save-restriction
-      (narrow-to-defun)
-      (let ((kernel-name )))))
+  (let* (
+         ;; is each accessor read or write only?
+         (read-or-write
+          (mapcar #'(lambda (s)
+                      (if (string-match "\\(global +const\\|global\\)" s) "read-only"
+                          ;; (cadr
+                          ;;  (read-multiple-choice
+                          ;;   (format "is the argument \"%s\" read-only or write-only?" s)
+                          ;;   '((?r "read-only" "The accessor should be read-only.")
+                          ;;     (?w "write-only" "The accessor should be write-only."))))
+                        "not-accessor")
+                      )
+                  (g--c-defun-params)
+                  ))
+         ;; functor-params is oneapi. globals replaced with accessors
+         (functor-params
+          (mapcar* #'(lambda (s read-or-write-flag)
+                       (replace-regexp-in-string "\\(global +const\\|global\\)"
+                                                 (if (string-match "read-only" read-or-write-flag)
+                                                     "read_accesor<T>"
+                                                   "write_accessor<T>")
+                                                 s)
+                       )
+                   (g--c-defun-params) read-or-write)
+          )
+         ;; functor-params names with type filtered out
+         (param-names
+          (mapcar #'(lambda (s)
+                             (string-match "[^ ]+[ ]*$" s)  ;; only parameter name. not type
+                             (match-string 0 s))
+                         (g--c-defun-params))
+              ))
 
-  (concat
-   "template<typename T>\n"
-   "class " (c-defun-name) "CreateKernel {\n"
-   "public:\n"
-   "    " (c-defun-name) "CreateKernel("
-   (mapconcat #'(lambda (s)
-                  (replace-regexp-in-string "\\(global +const\\|global\\)" "sycl::accessor<T, 1>" s))
-              (g--c-defun-params) ",")
-   ") :"
-   (mapconcat #'(lambda (s)
+    (concat
+     "template<typename T>\n"
+     "class " (c-defun-name) "CreateKernel {\n"
+     "public:\n"
+     "    "
+     (c-defun-name) "CreateKernel(" (string-join functor-params ",") ")\n"
+     (mapconcat #'(lambda (s) (concat s "_(" s ")")) param-names ", ")
+     " : {}\n\n"
+     "    void operator()(sycl::nd_item<2> it) const {\n"
+     "        sycl::group g = it.get_group();\n"
 
-                  )
-              (g--c-defun-params) "!!") " {}\n"
-   "    void operator()(sycl::nd_item<2> it) const {\n"
-   "        sycl::group g = it.get_group();\n\n"
-   ;; "      "  (g--functor-body) "\n"
-   "}\n"
-   "private:\n"
-   ;; (g--privates)
-   "}\n"
-   ) ;; concat
+     (g--replace-list-of-pairs-in-string
+      (save-excursion
+        (beginning-of-defun) (re-search-forward "{")
+        (buffer-substring-no-properties (point)
+                                        (progn (end-of-defun) (point))))
+      (append
+       '(("get_group_id" . "g.get_group_id")
+         ("get_local_id" . "it.get_local_id")
+         ("barrier([^)]*)" . "it.barrier()")
+         ("get_local_size" . "g.get_local_range")
+         ("global\\(.*\\) \\([^=\\n]+\\)[^\\n]*=" . "\\1 \\2="))
+       (seq-sort #'(lambda (pair-a pair-b)  ;; privates
+                     (< (length (car pair-a)) (length (car pair-b)))
+                     )
+                 (mapcar #'(lambda (s)
+                             (cons (concat "\\([^A-Za-z0-9_]\\)\\("
+                                           s
+                                           "\\)\\([^A-Za-z0-9_]\\)")
+                                   (concat "\\1\\2_\\3")))
+                         param-names))))
+     "\n"
+     "private:\n"
+     (string-join functor-params ";\n")
+     "\n};\n"
+     ) ;; concat
+    ) ;; let
   ) ;; defun
 
 
-;; do testing by starting repo from scratch
-(M (shell-command-to-string "cd ~/resize-af && git clean -dfx"))
-(g-harness-arrayfire "~/resize-af")
-(with-current-buffer (find-file-noselect "/home/gpryor/resize-af/src/backend/opencl/kernel/resize.cl")
-  (goto-char 3970)
+(defun g--gen-functor-call (functor-decl-params kernel-invoke functor-name)
+  (let* ((functor-decl-list (g--params-list functor-decl-params))
+         (kernel-invoke-list (g--params-list kernel-invoke)))
+    (concat
+     "auto Q = getQueue();\n"
+     "  Q.submit([&](auto &h) {\n"
 
-  (gdp--display-string-other-window     ;; main
-   (progn
-     (g--functor-string)
-     ;; (g-oneapi-port-defun)
-     ;;   ^^ this is a string.
+     (mapconcat #'(lambda (x) x)
+                (seq-filter #'(lambda (x) (string-match "accessor" x))
+                            functor-decl-list)
+                ";\n")
+     ";\n"
+
+     "  h.parallel_for(\n"
+     "     sycl::nd_range{global, local},\n"
+
+     functor-name "CreateKernel<T>("
+     (string-join
+      (seq-filter #'(lambda (x)
+                      (not (string-match "EnqueueArgs" x))
+                      )
+                  kernel-invoke-list)
+      ",")
+     "));"
+
+     "\n"
+     "});"
      )
-   ) ;; display other window
+    ) ;; let
+  ) ;; defun
+
+
+(defun g--driver-string ()
+  (let ()
+    (save-excursion
+      (save-restriction
+        (narrow-to-defun)
+        (g--replace-list-of-pairs-in-string  ;; from utils
+         (buffer-string)
+         (list '("^ *auto +.*=[^;]*;" . "")
+               '("Param\\( +\\)" . "Param<T>\\1" )
+               '("using +std::vector *;" . "")
+               '(" *std::array[^;]*;" . "")
+               '(" *std::vector[^;]*;" .  "")
+               '(" *vector[^;]*;" .  "")
+               ;; '(" *\\( +\\)vector[^;]*;" .  "\\1")
+               '("cl::NDRange local" . "auto local = sycl::range" )
+               '("cl::NDRange global" . "auto global = sycl::range")
+               '("CL_DEBUG_FINISH" . "ONEAPI_DEBUG_FINISH")
+               ;; (cons "^.*EnqueueArgs[^;]*;" (g--gen-functor-call functor-decl-params
+               ;;                                                   kernel-invoke
+               ;;                                                   functor-name))
+               ))
+        ) ;; save-restriction
+      ) ;; save-excursion
+    ) ;; let
+  ) ;; defun
+
+
+;; steps of port
+(global-set-key (kbd "C-c 1") #'(lambda ()   ;; generate the right functor
+                                  (interactive)
+                                  (find-file (g--opencl-kernel-fn))))
+(global-set-key (kbd "C-c 2") #'(lambda ()    ;; manually insert functor into oneapi driver
+                                  (interactive)
+                                  (kill-new (gdp--display-string-other-window (g--functor-string)))
+                                  (find-file (g--oneapi-driver-fn))
+                                  ))
+(global-set-key (kbd "C-c 3") #'(lambda ()  ;; go to driver function and generate driver
+                                  (interactive)
+                                  (find-file (g--oneapi-driver-fn))))
+
+(global-set-key (kbd "M-1") #'(lambda () (interactive) (find-file (g--opencl-driver-fn))))
+(global-set-key (kbd "M-2") #'(lambda () (interactive) (find-file (g--opencl-kernel-fn))))
+(global-set-key (kbd "M-3") #'(lambda () (interactive) (find-file (g--oneapi-driver-fn))))
+
+
+;; MAIN()
+
+;; do testing by starting repo from scratch
+(shell-command-to-string "cd ~/tile-af && git clean -dfx src/backend")
+(shell-command-to-string "git checkout 23b7bb7f")
+
+;; STEP 1 harness. global changes made too oneapi driver
+(g-harness-arrayfire "~/tile-af")
+
+(progn
+  ;; STEP 2,3,4 gen functor and put in kill ring from opencl kernel
+  (save-excursion
+    (with-current-buffer (find-file-noselect (g--opencl-kernel-fn))
+      (goto-char 720)
+      (let ((doodle (g--functor-string)))
+        (kill-new doodle)   ;; this simulates the interactive command
+        )
+      )
+    )
+
+  ;; STEP 5,6 insert functor into driver
+  (save-excursion
+    (with-current-buffer (find-file-noselect (g--oneapi-driver-fn))
+      (goto-char (point-min))
+      (re-search-forward "write_accessor") ;; end of definitions
+      (end-of-line) (insert "\n\n")
+      (yank)  ;; insert functor
+      (insert "\n\n")
+      )
+    )
+
+  ;; STEP 7,8,9 make a driver function
+  (save-excursion
+    (with-current-buffer (find-file-noselect (g--oneapi-driver-fn))
+      (goto-char 2872)
+      (let (driver-string (g--driver-string)) ;; create the driver
+        (save-restriction
+          (narrow-to-defun)
+          (erase-buffer)
+          )
+        )
+      (gdp--display-string-other-window
+       (with-current-buffer (find-file-noselect (g--oneapi-driver-fn))
+         (buffer-string)
+         )
+       )
+      )
+    )
   )
 
 
