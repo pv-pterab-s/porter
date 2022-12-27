@@ -1,24 +1,4 @@
-;;; porter.el --- port an opencl function to oneapi within an arrayfire clone -*- lexical-binding: t; -*-
-
-;; Copyright (C) 2022  Gallagher Pryor
-
-;; Author: Gallagher Pryor <gpryor@a770>
-;; Keywords: convenience
-
-;; This program is free software; you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-
-;; This program is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-;;; Code:
+;;; porter.el --- port an opencl function to oneapi within an arrayfire clone -*- lexical-binding: t; compile-command: "emacsclient -e '(load \"/home/gpryor/porter/test.el\")'"; -*-
 (require 'g-utils)  ;; got to be one the load path
 
 
@@ -45,7 +25,7 @@
                    " function " g--function-to-port))
 
   ;; generate new oneapi driver file if missing from harnessed clone
-  (if (or t (not (file-exists-p (g--oneapi-driver))))
+  (if (or t (not (file-exists-p (g--oneapi-driver))))ttes
       (progn
         ;; oneapi is copy of opencl driver
         (message "copying opencl driver into oneapi kernel")
@@ -78,7 +58,10 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
 
   ) ;; defun
 
-(defun g--functor-string ()
+(defun g--functor-string-helper ()
+  (with-current-buffer (find-file-noselect filename))
+  (goto-char point)
+
   (if (not  ;; don't let this function run from a confusing place
        (and (string= (file-name-extension (buffer-file-name)) "cl")
             (save-excursion
@@ -158,6 +141,16 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
     ) ;; let
   ) ;; defun
 
+(defun g--functor-string-helper (point &optional filename)
+  (interactive "d")
+  (if boundp filename
+    (with-current-buffer (find-file-noselect filename)
+      (goto-char point)
+      (g--functor-string))
+  (progn
+    (goto-char point)
+    (g--functor-string))
+  ))
 
 (defun g--gen-functor-call (functor-decl-params kernel-invoke functor-name)
   (let* ((functor-decl-list (g--params-list functor-decl-params))
@@ -234,57 +227,6 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
 (global-set-key (kbd "M-1") #'(lambda () (interactive) (find-file (g--opencl-driver-fn))))
 (global-set-key (kbd "M-2") #'(lambda () (interactive) (find-file (g--opencl-kernel-fn))))
 (global-set-key (kbd "M-3") #'(lambda () (interactive) (find-file (g--oneapi-driver-fn))))
-
-
-;; MAIN()
-
-;; do testing by starting repo from scratch
-(shell-command-to-string "cd ~/tile-af && git clean -dfx src/backend")
-(shell-command-to-string "git checkout 23b7bb7f")
-
-;; STEP 1 harness. global changes made too oneapi driver
-(g-harness-arrayfire "~/tile-af")
-
-(progn
-  ;; STEP 2,3,4 gen functor and put in kill ring from opencl kernel
-  (save-excursion
-    (with-current-buffer (find-file-noselect (g--opencl-kernel-fn))
-      (goto-char 720)
-      (let ((doodle (g--functor-string)))
-        (kill-new doodle)   ;; this simulates the interactive command
-        )
-      )
-    )
-
-  ;; STEP 5,6 insert functor into driver
-  (save-excursion
-    (with-current-buffer (find-file-noselect (g--oneapi-driver-fn))
-      (goto-char (point-min))
-      (re-search-forward "write_accessor") ;; end of definitions
-      (end-of-line) (insert "\n\n")
-      (yank)  ;; insert functor
-      (insert "\n\n")
-      )
-    )
-
-  ;; STEP 7,8,9 make a driver function
-  (save-excursion
-    (with-current-buffer (find-file-noselect (g--oneapi-driver-fn))
-      (goto-char 2872)
-      (let (driver-string (g--driver-string)) ;; create the driver
-        (save-restriction
-          (narrow-to-defun)
-          (erase-buffer)
-          )
-        )
-      (gdp--display-string-other-window
-       (with-current-buffer (find-file-noselect (g--oneapi-driver-fn))
-         (buffer-string)
-         )
-       )
-      )
-    )
-  )
 
 
 
