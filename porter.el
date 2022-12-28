@@ -2,18 +2,44 @@
 (require 'g-utils)
 
 
-(defun g--opencl-kernel-fn () (concat g--arrayfire-dir "/src/backend/opencl/kernel/" g--function-to-port ".cl"))
-(defun g--opencl-driver-fn () (concat g--arrayfire-dir "/src/backend/opencl/kernel/" g--function-to-port ".hpp"))
-(defun g--oneapi-driver-fn () (replace-regexp-in-string "opencl/" "oneapi/" (g--opencl-driver-fn)))
-
-
 (defun g-harness-arrayfire (arrayfire-dir)
+  (interactive "Denter arrayfire clone directory: ")
+  (setq g--arrayfire-dir arrayfire-dir)
+  (setq g--function-to-port (replace-regexp-in-string "-af$" "" (file-name-nondirectory g--arrayfire-dir)))
+  (setq g--opencl-kernel-fn (concat g--arrayfire-dir "/src/backend/opencl/kernel/" g--function-to-port ".cl"))
+  (setq g--opencl-driver-fn (concat g--arrayfire-dir "/src/backend/opencl/kernel/" g--function-to-port ".hpp"))
+  (setq g--oneapi-driver-fn (replace-regexp-in-string "opencl/" "oneapi/" (g--opencl-driver-fn)))
+
+  (message (concat "harnessed arrayfire at " g--arrayfire-dir " function " g--function-to-port))
+
+  (with-current-buffer (find-file-noselect g--oneapi-driver-fn)
+    (erase-buffer)
+    (insert-file-contents g--opencl-driver-fn)
+    ;; (insert (with-current-buffer (find-file-noselect g--opencl-driver-fn)
+    ;;           (buffer-string)))
+
+    (replace-regexp-in-region "opencl" "oneapi" (point-min) (point-max))
+    (goto-char (point-min))
+    (re-search-forward "namespace kernel {")
+    (insert "\n\ntemplate<typename T>
+using local_accessor = sycl::accessor<T, 1, sycl::access::mode::read_write,
+                                      sycl::access::target::local>;
+template<typename T>
+using read_accessor = sycl::accessor<T, 1, sycl::access::mode::read>;
+template<typename T>
+using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n"
+            )   ;; insert
+    ) ;; with-current-buffer
+  ) ;; defun
+
+
+(defun g-harness-arrayfire-previous (arrayfire-dir)
   (interactive "Denter arrayfire clone directory: ")
 
   (unless (file-directory-p arrayfire-dir) (error "harnessed arrayfire must be a valid dir"))
-  (setq g--arrayfire-dir arrayfire-dir)  ;; global defines target af clone (checking some things)
+  (setq g--arrayfire-dir arrayfire-dir)
 
-  ;; globally define target function to port (checking some things)
+  ;; globally define target function to port
   (let ((this-dir-name (file-name-nondirectory
                         (directory-file-name
                          (expand-file-name arrayfire-dir)))))
@@ -29,10 +55,10 @@
       (progn
         ;; oneapi is copy of opencl driver
         (message "copying opencl driver into oneapi kernel")
-        (with-current-buffer (find-file-noselect (g--oneapi-driver-fn))
+        (with-current-buffer (find-file-noselect g--oneapi-driver-fn)
           (erase-buffer)
           (insert
-           (with-current-buffer (find-file-noselect (g--opencl-driver-fn))
+           (with-current-buffer (find-file-noselect g--opencl-driver-fn)
              (buffer-string)))
 
           ;; make non-user-input changes to oneapi driver
@@ -54,7 +80,7 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
         ) ;; progn
     )  ;; if
 
-  ;; (find-file-other-window (g--oneapi-driver-fn))
+  ;; (find-file-other-window g--oneapi-driver-fn)
 
   ) ;; defun
 
@@ -144,7 +170,7 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
   (interactive "d")
   (with-current-buffer (if filename (find-file-noselect filename) (current-buffer))
       (goto-char point)
-      (if (boundp g--testing)
+      (if (boundp 'g--testing)
           (g--functor-string-helper)
         (gdp--display-string-other-window (g--functor-string-helper)))))
 
@@ -223,19 +249,19 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
 ;; steps of port
 (global-set-key (kbd "C-c 1") #'(lambda ()   ;; generate the right functor
                                   (interactive)
-                                  (find-file (g--opencl-kernel-fn))))
+                                  (find-file g--opencl-kernel-fn)))
 (global-set-key (kbd "C-c 2") #'(lambda ()    ;; manually insert functor into oneapi driver
                                   (interactive)
                                   (kill-new (gdp--display-string-other-window (g--functor-string)))
-                                  (find-file (g--oneapi-driver-fn))
+                                  (find-file g--oneapi-driver-fn)
                                   ))
 (global-set-key (kbd "C-c 3") #'(lambda ()  ;; go to driver function and generate driver
                                   (interactive)
-                                  (find-file (g--oneapi-driver-fn))))
+                                  (find-file g--oneapi-driver-fn)))
 
-(global-set-key (kbd "M-1") #'(lambda () (interactive) (find-file (g--opencl-driver-fn))))
-(global-set-key (kbd "M-2") #'(lambda () (interactive) (find-file (g--opencl-kernel-fn))))
-(global-set-key (kbd "M-3") #'(lambda () (interactive) (find-file (g--oneapi-driver-fn))))
+(global-set-key (kbd "M-1") #'(lambda () (interactive) (find-file g--opencl-driver-fn)))
+(global-set-key (kbd "M-2") #'(lambda () (interactive) (find-file g--opencl-kernel-fn)))
+(global-set-key (kbd "M-3") #'(lambda () (interactive) (find-file g--oneapi-driver-fn)))
 
 
 
