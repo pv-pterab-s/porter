@@ -1,5 +1,5 @@
-;;; porter.el --- port an opencl function to oneapi within an arrayfire clone -*- lexical-binding: t; compile-command: "emacsclient -e '(load \"/home/gpryor/porter/test.el\")'"; -*-
-(require 'g-utils)  ;; got to be one the load path
+;;; porter.el --- port an opencl function to oneapi within an arrayfire clone -*- lexical-binding: t; my-lisp-to-evaluate: "(gallagher-eval-buffer \"/home/gpryor/porter/test.el\")"; -*-
+(require 'g-utils)
 
 
 (defun g--opencl-kernel-fn () (concat g--arrayfire-dir "/src/backend/opencl/kernel/" g--function-to-port ".cl"))
@@ -25,7 +25,7 @@
                    " function " g--function-to-port))
 
   ;; generate new oneapi driver file if missing from harnessed clone
-  (if (or t (not (file-exists-p (g--oneapi-driver))))ttes
+  (if (or t (not (file-exists-p (g--oneapi-driver))))
       (progn
         ;; oneapi is copy of opencl driver
         (message "copying opencl driver into oneapi kernel")
@@ -58,9 +58,8 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
 
   ) ;; defun
 
+
 (defun g--functor-string-helper ()
-  (with-current-buffer (find-file-noselect filename))
-  (goto-char point)
 
   (if (not  ;; don't let this function run from a confusing place
        (and (string= (file-name-extension (buffer-file-name)) "cl")
@@ -141,16 +140,13 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
     ) ;; let
   ) ;; defun
 
-(defun g--functor-string-helper (point &optional filename)
+(defun g--functor-string (point &optional filename)
   (interactive "d")
-  (if boundp filename
-    (with-current-buffer (find-file-noselect filename)
+  (with-current-buffer (if filename (find-file-noselect filename) (current-buffer))
       (goto-char point)
-      (g--functor-string))
-  (progn
-    (goto-char point)
-    (g--functor-string))
-  ))
+      (if (boundp g--testing)
+          (g--functor-string-helper)
+        (gdp--display-string-other-window (g--functor-string-helper)))))
 
 (defun g--gen-functor-call (functor-decl-params kernel-invoke functor-name)
   (let* ((functor-decl-list (g--params-list functor-decl-params))
@@ -184,7 +180,7 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
   ) ;; defun
 
 
-(defun g--driver-string ()
+(defun g--driver-string-helper ()
   (let ()
     (save-excursion
       (save-restriction
@@ -210,6 +206,19 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
     ) ;; let
   ) ;; defun
 
+(defun g--driver-string (point &optional filename)
+  (interactive "d")
+  (if filename
+      (with-current-buffer (find-file-noselect filename)
+        (goto-char point)
+        (g--driver-string-helper)
+        )
+    (progn  ;; missing filename means called interactively
+      (goto-char point)
+      (gdp--display-string-other-window
+       (g--driver-string-helper))
+      )
+  ))
 
 ;; steps of port
 (global-set-key (kbd "C-c 1") #'(lambda ()   ;; generate the right functor
