@@ -2,6 +2,7 @@
 (require 'g-utils)
 
 
+
 (defun g-harness-arrayfire (arrayfire-dir)
   (interactive "Denter arrayfire clone directory: ")
   (setq g--arrayfire-dir arrayfire-dir)
@@ -15,10 +16,9 @@
   (with-current-buffer (find-file-noselect g--oneapi-driver-fn)
     (erase-buffer)
     (insert-file-contents g--opencl-driver-fn)
-    ;; (insert (with-current-buffer (find-file-noselect g--opencl-driver-fn)
-    ;;           (buffer-string)))
 
     (replace-regexp-in-region "opencl" "oneapi" (point-min) (point-max))
+    (delete-matching-lines ".*include.*kernel_headers.*" (point-min) (point-max))
     (goto-char (point-min))
     (re-search-forward "namespace kernel {")
     (insert "\n\ntemplate<typename T>
@@ -33,56 +33,79 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n"
   ) ;; defun
 
 
-(defun g-harness-arrayfire-previous (arrayfire-dir)
-  (interactive "Denter arrayfire clone directory: ")
 
-  (unless (file-directory-p arrayfire-dir) (error "harnessed arrayfire must be a valid dir"))
-  (setq g--arrayfire-dir arrayfire-dir)
+(defun g--ask-if-param-is-read-or-write (param)
+  ;; (if (called-interactively-p) (cl-return "read-only"))
+  (cadr
+   (read-multiple-choice
+    (format "is the argument \"%s\" read-only or write-only?" param)
+    '((?r "read-only" "The accessor should be read-only.")
+      (?w "write-only" "The accessor should be write-only.")))))
 
-  ;; globally define target function to port
-  (let ((this-dir-name (file-name-nondirectory
-                        (directory-file-name
-                         (expand-file-name arrayfire-dir)))))
-    (if (not (string-match "-af$" this-dir-name))
-        (error "must run in arrayfire dir named with trailing \"-af\""))
-    (setq g--function-to-port (replace-regexp-in-string "-af$" "" this-dir-name)))
+(defun g--functor-string-helper-new (should-ask-questions)
+  (let (is-global-flags
+        read-or-write-flags
+        oneapi-param-types
+        oneapi-params
+        sorted-param-names
+        search-regexps
+        replacements)
 
-  (message (concat "harnessed arrayfire at " g--arrayfire-dir
-                   " function " g--function-to-port))
+    (setq is-global-flags (mapcar #'(lambda (param) (string-match "global" param)) (g--c-defun-params-types)))
 
-  ;; generate new oneapi driver file if missing from harnessed clone
-  (if (or t (not (file-exists-p (g--oneapi-driver))))
-      (progn
-        ;; oneapi is copy of opencl driver
-        (message "copying opencl driver into oneapi kernel")
-        (with-current-buffer (find-file-noselect g--oneapi-driver-fn)
-          (erase-buffer)
-          (insert
-           (with-current-buffer (find-file-noselect g--opencl-driver-fn)
-             (buffer-string)))
+    (setq read-or-write-flags
+          (mapcar* #'(lambda (param-type is-global)
+                       (cond ((not is-global) "not-accessor")
+                             (should-ask-questions (g--ask-if-param-is-read-or-write param-type))
+                             (t "read-only")
+                             ))
+                   (g--c-defun-params-types) is-global-flags))
 
-          ;; make non-user-input changes to oneapi driver
-          (replace-regexp-in-region "opencl" "oneapi" (point-min) (point-max))
-          (goto-char (point-min))
-          (re-search-forward "namespace kernel {")
-          (insert "
+    (setq oneapi-param-types
+          (mapcar* #'(lambda (param-type read-or-write)
+                       (cond
+                        ((string-equal read-or-write "not-accessor") param-type)
+                        ((string-equal read-or-write "read-only") "read_accesor<T>")
+                        ((string-equal read-or-write "write-only") "write_accessor<T>")))
+                   (g--c-defun-params-types) read-or-write-flags))
 
-template<typename T>
-using local_accessor = sycl::accessor<T, 1, sycl::access::mode::read_write,
-                                      sycl::access::target::local>;
-template<typename T>
-using read_accessor = sycl::accessor<T, 1, sycl::access::mode::read>;
-template<typename T>
-using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
-")
+    (setq oneapi-params
+          (mapcar* #'(lambda (type name) (concat type " " name))
+                   oneapi-param-types (g--c-defun-params-names)))
 
-          )  ;; with-current-buffer
-        ) ;; progn
-    )  ;; if
+    (setq sorted-param-names  ;; these three: for put underscores on private vars in functor body
+          (g--sort-strings-by-length (g--c-defun-params-names)))
+    (setq search-regexps
+          #'(mapcar #'(lambda (s) (concat "\\([^A-Za-z0-9_]\\)\\(" s "\\)\\([^A-Za-z0-9_]\\)")) sorted-param-names))
+    (setq replacements
+          (mapcar #'(lambda (s) (concat "\\1\\2_\\3")) sorted-param-names))
 
-  ;; (find-file-other-window g--oneapi-driver-fn)
+    ;; (concat
+    ;;  "template<typename T>\n"
+    ;;  "class " (c-defun-name) "CreateKernel {\n"
+    ;;  "public:\n"
+    ;;  "    "
+    ;;  (c-defun-name) "CreateKernel(" (string-join oneapi-params ",") ")\n"
+    ;;  (mapconcat #'(lambda (s) (concat s "_(" s ")")) (g--c-defun-params-names) ", ") " : {}\n\n"
+    ;;  "    void operator()(sycl::nd_item<2> it) const {\n"
+    ;;  "        sycl::group g = it.get_group();\n"
 
-  ) ;; defun
+    ;;  (g--replace-list-of-pairs
+    ;;   (g--replace-list-of-pairs (g--c-defun-body)
+    ;;                             '(("get_group_id" . "g.get_group_id")
+    ;;                               ("get_local_id" . "it.get_local_id")
+    ;;                               ("barrier([^)]*)" . "it.barrier()")
+    ;;                               ("get_local_size" . "g.get_local_range")
+    ;;                               ("global\\(.*\\) \\([^=\\n]+\\)[^\\n]*=" . "\\1 \\2=")))
+    ;;   (g--zip search-regexps replacements))
+
+    ;;  "\n"
+    ;;  "private:\n"
+    ;;  (string-join oneapi-params ";\n")
+    ;;  "\n};\n"
+    ;;  )
+    ;; )
+  ))
 
 
 (defun g--functor-string-helper ()
@@ -97,7 +120,7 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
   (let* (
          ;; is each accessor read or write only?
          (read-or-write
-          (mapcar #'(lambda (s)
+          (mapcar #'(lambda (s)  ;; TODO default read-only when not called interactively
                       (if (string-match "\\(global +const\\|global\\)" s) "read-only"
                           ;; (cadr
                           ;;  (read-multiple-choice
@@ -108,7 +131,7 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
                       )
                   (g--c-defun-params)
                   ))
-         ;; functor-params is oneapi. globals replaced with accessors
+         ;; make functor-params oneapi by replacing globals with accessors
          (functor-params
           (mapcar* #'(lambda (s read-or-write-flag)
                        (replace-regexp-in-string "\\(global +const\\|global\\)"
@@ -119,13 +142,7 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
                        )
                    (g--c-defun-params) read-or-write)
           )
-         ;; functor-params names with type filtered out
-         (param-names
-          (mapcar #'(lambda (s)
-                             (string-match "[^ ]+[ ]*$" s)  ;; only parameter name. not type
-                             (match-string 0 s))
-                         (g--c-defun-params))
-              ))
+         )
 
     (concat
      "template<typename T>\n"
@@ -133,7 +150,7 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
      "public:\n"
      "    "
      (c-defun-name) "CreateKernel(" (string-join functor-params ",") ")\n"
-     (mapconcat #'(lambda (s) (concat s "_(" s ")")) param-names ", ")
+     (mapconcat #'(lambda (s) (concat s "_(" s ")")) (g--c-defun-params-names) ", ")
      " : {}\n\n"
      "    void operator()(sycl::nd_item<2> it) const {\n"
      "        sycl::group g = it.get_group();\n"
@@ -157,7 +174,7 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
                                            s
                                            "\\)\\([^A-Za-z0-9_]\\)")
                                    (concat "\\1\\2_\\3")))
-                         param-names))))
+                         (g--c-defun-params-names)))))
      "\n"
      "private:\n"
      (string-join functor-params ";\n")
@@ -171,9 +188,7 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
   (interactive (list (point) (current-buffer)))
   (with-current-buffer buffer
     (goto-char point)
-    (let ((str (g--functor-string-helper)))
-      (if (not (called-interactively-p 'any)) str
-               (gdp--display-string-other-window str)))))
+    (g--functor-string-helper-new (called-interactively-p 'any))))
 
 
 (defun g--gen-functor-call (functor-decl-params kernel-invoke functor-name)
@@ -232,34 +247,19 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
         ) ;; save-restriction
       ) ;; save-excursion
     ) ;; let
+
   ) ;; defun
+
 
 (defun g--driver-string (point buffer)
   (interactive (list (point) (current-buffer)))
   (with-current-buffer buffer
     (goto-char point)
-    (let ((str (g--driver-string-helper)))
-      (if (not (called-interactively-p 'any)) str
-               (gdp--display-string-other-window str)))))
+    (g--driver-string-helper)))
 
 
-;; steps of port
-(global-set-key (kbd "C-c 1") #'(lambda ()   ;; generate the right functor
-                                  (interactive)
-                                  (find-file g--opencl-kernel-fn)))
-(global-set-key (kbd "C-c 2") #'(lambda ()    ;; manually insert functor into oneapi driver
-                                  (interactive)
-                                  (kill-new (gdp--display-string-other-window (g--functor-string)))
-                                  (find-file g--oneapi-driver-fn)
-                                  ))
-(global-set-key (kbd "C-c 3") #'(lambda ()  ;; go to driver function and generate driver
-                                  (interactive)
-                                  (find-file g--oneapi-driver-fn)))
+;; \TODO steps of port  e.g.  "C-c 1", "C-c 2", etc
 
 (global-set-key (kbd "M-1") #'(lambda () (interactive) (find-file g--opencl-driver-fn)))
 (global-set-key (kbd "M-2") #'(lambda () (interactive) (find-file g--opencl-kernel-fn)))
 (global-set-key (kbd "M-3") #'(lambda () (interactive) (find-file g--oneapi-driver-fn)))
-
-
-
-(provide 'porter)
