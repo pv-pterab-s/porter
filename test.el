@@ -36,9 +36,8 @@
   )
 
 
-;; TEST FUNCTOR GENERATION IN ISOLATION
-(gdp--display-string-other-window
-  (g--functor-string 720 (find-file-noselect test-opencl-kernel-fn)))
+;; ;; TEST FUNCTOR GENERATION IN ISOLATION
+(MM (g--functor-string 720 (find-file-noselect test-opencl-kernel-fn)))
 
 
 ;; END TO END FINAL TEST is disabled while we sort out some subroutines

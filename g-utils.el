@@ -104,7 +104,7 @@
 
 
 (defun g--zip (list-a list-b)
-  (mapcar* #'(lambda (a b) '(a b)) list-a list-b))
+  (mapcar* 'cons list-a list-b))
 
 
 (provide 'g-utils)

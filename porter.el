@@ -33,7 +33,6 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n"
   ) ;; defun
 
 
-
 (defun g--ask-if-param-is-read-or-write (param)
   ;; (if (called-interactively-p) (cl-return "read-only"))
   (cadr
@@ -41,6 +40,7 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n"
     (format "is the argument \"%s\" read-only or write-only?" param)
     '((?r "read-only" "The accessor should be read-only.")
       (?w "write-only" "The accessor should be write-only.")))))
+
 
 (defun g--functor-string-helper-new (should-ask-questions)
   (let (is-global-flags
@@ -65,129 +65,51 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n"
           (mapcar* #'(lambda (param-type read-or-write)
                        (cond
                         ((string-equal read-or-write "not-accessor") param-type)
-                        ((string-equal read-or-write "read-only") "read_accesor<T>")
+                        ((string-equal read-or-write "read-only") "read_accessor<T>")
                         ((string-equal read-or-write "write-only") "write_accessor<T>")))
                    (g--c-defun-params-types) read-or-write-flags))
 
     (setq oneapi-params
-          (mapcar* #'(lambda (type name) (concat type " " name))
+          (mapcar* #'(lambda (type name) (concat (string-trim type) " " name))
                    oneapi-param-types (g--c-defun-params-names)))
 
     (setq sorted-param-names  ;; these three: for put underscores on private vars in functor body
           (g--sort-strings-by-length (g--c-defun-params-names)))
     (setq search-regexps
-          #'(mapcar #'(lambda (s) (concat "\\([^A-Za-z0-9_]\\)\\(" s "\\)\\([^A-Za-z0-9_]\\)")) sorted-param-names))
+          (mapcar #'(lambda (s) (concat "\\([^A-Za-z0-9_]\\)\\(" s "\\)\\([^A-Za-z0-9_]\\)")) sorted-param-names))
     (setq replacements
           (mapcar #'(lambda (s) (concat "\\1\\2_\\3")) sorted-param-names))
-
-    ;; (concat
-    ;;  "template<typename T>\n"
-    ;;  "class " (c-defun-name) "CreateKernel {\n"
-    ;;  "public:\n"
-    ;;  "    "
-    ;;  (c-defun-name) "CreateKernel(" (string-join oneapi-params ",") ")\n"
-    ;;  (mapconcat #'(lambda (s) (concat s "_(" s ")")) (g--c-defun-params-names) ", ") " : {}\n\n"
-    ;;  "    void operator()(sycl::nd_item<2> it) const {\n"
-    ;;  "        sycl::group g = it.get_group();\n"
-
-    ;;  (g--replace-list-of-pairs
-    ;;   (g--replace-list-of-pairs (g--c-defun-body)
-    ;;                             '(("get_group_id" . "g.get_group_id")
-    ;;                               ("get_local_id" . "it.get_local_id")
-    ;;                               ("barrier([^)]*)" . "it.barrier()")
-    ;;                               ("get_local_size" . "g.get_local_range")
-    ;;                               ("global\\(.*\\) \\([^=\\n]+\\)[^\\n]*=" . "\\1 \\2=")))
-    ;;   (g--zip search-regexps replacements))
-
-    ;;  "\n"
-    ;;  "private:\n"
-    ;;  (string-join oneapi-params ";\n")
-    ;;  "\n};\n"
-    ;;  )
-    ;; )
-  ))
-
-
-(defun g--functor-string-helper ()
-
-  (if (not  ;; don't let this function run from a confusing place
-       (and (string= (file-name-extension (buffer-file-name)) "cl")
-            (save-excursion
-              (beginning-of-defun)
-              (looking-at "^kernel"))))
-      (error "must run from within an opencl kernel"))
-
-  (let* (
-         ;; is each accessor read or write only?
-         (read-or-write
-          (mapcar #'(lambda (s)  ;; TODO default read-only when not called interactively
-                      (if (string-match "\\(global +const\\|global\\)" s) "read-only"
-                          ;; (cadr
-                          ;;  (read-multiple-choice
-                          ;;   (format "is the argument \"%s\" read-only or write-only?" s)
-                          ;;   '((?r "read-only" "The accessor should be read-only.")
-                          ;;     (?w "write-only" "The accessor should be write-only."))))
-                        "not-accessor")
-                      )
-                  (g--c-defun-params)
-                  ))
-         ;; make functor-params oneapi by replacing globals with accessors
-         (functor-params
-          (mapcar* #'(lambda (s read-or-write-flag)
-                       (replace-regexp-in-string "\\(global +const\\|global\\)"
-                                                 (if (string-match "read-only" read-or-write-flag)
-                                                     "read_accesor<T>"
-                                                   "write_accessor<T>")
-                                                 s)
-                       )
-                   (g--c-defun-params) read-or-write)
-          )
-         )
 
     (concat
      "template<typename T>\n"
      "class " (c-defun-name) "CreateKernel {\n"
      "public:\n"
      "    "
-     (c-defun-name) "CreateKernel(" (string-join functor-params ",") ")\n"
-     (mapconcat #'(lambda (s) (concat s "_(" s ")")) (g--c-defun-params-names) ", ")
-     " : {}\n\n"
+     (c-defun-name) "CreateKernel(" (string-join oneapi-params ", ") ") : "
+     (mapconcat #'(lambda (s) (concat s "_(" s ")")) (g--c-defun-params-names) ", ") " {}\n"
      "    void operator()(sycl::nd_item<2> it) const {\n"
      "        sycl::group g = it.get_group();\n"
 
-     (g--replace-list-of-pairs-in-string
-      (save-excursion
-        (beginning-of-defun) (re-search-forward "{")
-        (buffer-substring-no-properties (point)
-                                        (progn (end-of-defun) (point))))
-      (append
-       '(("get_group_id" . "g.get_group_id")
-         ("get_local_id" . "it.get_local_id")
-         ("barrier([^)]*)" . "it.barrier()")
-         ("get_local_size" . "g.get_local_range")
-         ("global\\(.*\\) \\([^=\\n]+\\)[^\\n]*=" . "\\1 \\2="))
-       (seq-sort #'(lambda (pair-a pair-b)  ;; privates
-                     (< (length (car pair-a)) (length (car pair-b)))
-                     )
-                 (mapcar #'(lambda (s)
-                             (cons (concat "\\([^A-Za-z0-9_]\\)\\("
-                                           s
-                                           "\\)\\([^A-Za-z0-9_]\\)")
-                                   (concat "\\1\\2_\\3")))
-                         (g--c-defun-params-names)))))
+     ;; (g--replace-list-of-pairs
+      (g--replace-list-of-pairs (g--c-defun-body)
+                                '(("get_group_id" . "g.get_group_id")
+                                  ("get_local_id" . "it.get_local_id")
+                                  ("barrier([^)]*)" . "it.barrier()")
+                                  ("get_local_size" . "g.get_local_range")
+                                  ("global\\(.*\\) \\([^=\\n]+\\)[^\\n]*=" . "\\1 \\2=")))
+      ;; (g--zip search-regexps replacements))
+
      "\n"
      "private:\n"
-     (string-join functor-params ";\n")
-     "\n};\n"
-     ) ;; concat
-    ) ;; let
-  ) ;; defun
-
-
+     (string-join (mapcar #'(lambda (x) (concat x "_")) oneapi-params) ";\n") ";\n"
+     "};\n"
+     )
+    )
+  )
 (defun g--functor-string (point buffer)
   (interactive (list (point) (current-buffer)))
   (with-current-buffer buffer
-    (goto-char point)
+    (goto-char point);
     (g--functor-string-helper-new (called-interactively-p 'any))))
 
 
