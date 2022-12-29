@@ -166,13 +166,15 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
     ) ;; let
   ) ;; defun
 
-(defun g--functor-string (point &optional filename)
-  (interactive "d")
-  (with-current-buffer (if filename (find-file-noselect filename) (current-buffer))
-      (goto-char point)
-      (if (boundp 'g--testing)
-          (g--functor-string-helper)
-        (gdp--display-string-other-window (g--functor-string-helper)))))
+
+(defun g--functor-string (point buffer)
+  (interactive (list (point) (current-buffer)))
+  (with-current-buffer buffer
+    (goto-char point)
+    (let ((str (g--functor-string-helper)))
+      (if (not (called-interactively-p 'any)) str
+               (gdp--display-string-other-window str)))))
+
 
 (defun g--gen-functor-call (functor-decl-params kernel-invoke functor-name)
   (let* ((functor-decl-list (g--params-list functor-decl-params))
@@ -232,19 +234,14 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
     ) ;; let
   ) ;; defun
 
-(defun g--driver-string (point &optional filename)
-  (interactive "d")
-  (if filename
-      (with-current-buffer (find-file-noselect filename)
-        (goto-char point)
-        (g--driver-string-helper)
-        )
-    (progn  ;; missing filename means called interactively
-      (goto-char point)
-      (gdp--display-string-other-window
-       (g--driver-string-helper))
-      )
-  ))
+(defun g--driver-string (point buffer)
+  (interactive (list (point) (current-buffer)))
+  (with-current-buffer buffer
+    (goto-char point)
+    (let ((str (g--driver-string-helper)))
+      (if (not (called-interactively-p 'any)) str
+               (gdp--display-string-other-window str)))))
+
 
 ;; steps of port
 (global-set-key (kbd "C-c 1") #'(lambda ()   ;; generate the right functor
