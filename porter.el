@@ -2,7 +2,6 @@
 (require 'g-utils)
 
 
-
 (defun g-harness-arrayfire (arrayfire-dir)
   (interactive "Denter arrayfire clone directory: ")
   (setq g--arrayfire-dir arrayfire-dir)
@@ -12,11 +11,13 @@
   (setq g--oneapi-driver-fn (replace-regexp-in-string "opencl/" "oneapi/" (g--opencl-driver-fn)))
 
   (message (concat "harnessed arrayfire at " g--arrayfire-dir " function " g--function-to-port))
+  )
 
-  (with-current-buffer (find-file-noselect g--oneapi-driver-fn)
-    (erase-buffer)
-    (insert-file-contents g--opencl-driver-fn)
 
+(defun g--oneapi-driver-shell (buffer)
+  (interactive (buffer))
+  (with-temp-buffer
+    (insert (with-current-buffer buffer (buffer-string)))
     (replace-regexp-in-region "opencl" "oneapi" (point-min) (point-max))
     (delete-matching-lines ".*include.*kernel_headers.*" (point-min) (point-max))
     (goto-char (point-min))
@@ -27,10 +28,8 @@ using local_accessor = sycl::accessor<T, 1, sycl::access::mode::read_write,
 template<typename T>
 using read_accessor = sycl::accessor<T, 1, sycl::access::mode::read>;
 template<typename T>
-using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n"
-            )   ;; insert
-    ) ;; with-current-buffer
-  ) ;; defun
+using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
+    (buffer-string)))
 
 
 (defun g--ask-if-param-is-read-or-write (param)
@@ -109,7 +108,7 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n"
 (defun g--functor-string (point buffer)
   (interactive (list (point) (current-buffer)))
   (with-current-buffer buffer
-    (goto-char point);
+    (goto-char point)
     (g--functor-string-helper-new (called-interactively-p 'any))))
 
 

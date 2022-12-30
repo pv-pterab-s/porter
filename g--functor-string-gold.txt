@@ -1,0 +1,49 @@
+template<typename T>
+class tileCreateKernel {
+public:
+    tileCreateKernel(read_accessor<T> out, read_accessor<T> in, const KParam op, const KParam ip, const int blocksPerMatX, const int blocksPerMatY) : out_(out), in_(in), op_(op), ip_(ip), blocksPerMatX_(blocksPerMatX), blocksPerMatY_(blocksPerMatY) {}
+    void operator()(sycl::nd_item<2> it) const {
+        sycl::group g = it.get_group();
+
+    const int oz = g.get_group_id(0) / blocksPerMatX;
+    const int ow = g.get_group_id(1) / blocksPerMatY;
+
+    const int blockIdx_x = g.get_group_id(0) - oz * blocksPerMatX;
+    const int blockIdx_y = g.get_group_id(1) - ow * blocksPerMatY;
+
+    const int xx = it.get_local_id(0) + blockIdx_x * g.get_local_range(0);
+    const int yy = it.get_local_id(1) + blockIdx_y * g.get_local_range(1);
+
+    if (xx >= op.dims[0] || yy >= op.dims[1] || oz >= op.dims[2] ||
+        ow >= op.dims[3])
+        return;
+
+    const int iz  = oz % ip.dims[2];
+    const int iw  = ow % ip.dims[3];
+    const int izw = iw * ip.strides[3] + iz * ip.strides[2];
+    const int ozw = ow * op.strides[3] + oz * op.strides[2];
+
+    const int incy = blocksPerMatY * g.get_local_range(1);
+    const int incx = blocksPerMatX * g.get_local_range(0);
+
+    for (int oy = yy; oy < op.dims[1]; oy += incy) {
+        const int iy = oy % ip.dims[1];
+        for (int ox = xx; ox < op.dims[0]; ox += incx) {
+            const int ix = ox % ip.dims[0];
+
+            int iMem = izw + iy * ip.strides[1] + ix;
+            int oMem = ozw + oy * op.strides[1] + ox;
+
+            out[oMem] = in[ip.offset + iMem];
+        }
+    }
+}
+
+private:
+read_accessor<T> out_;
+read_accessor<T> in_;
+const KParam op_;
+const KParam ip_;
+const int blocksPerMatX_;
+const int blocksPerMatY_;
+};
