@@ -56,7 +56,7 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
           (mapcar* #'(lambda (param-type is-global)
                        (cond ((not is-global) "not-accessor")
                              (should-ask-questions (g--ask-if-param-is-read-or-write param-type))
-                             (t "read-only")
+                             (t "write-only")
                              ))
                    (g--c-defun-params-types) is-global-flags))
 
@@ -89,14 +89,15 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
      "    void operator()(sycl::nd_item<2> it) const {\n"
      "        sycl::group g = it.get_group();\n"
 
-     ;; (g--replace-list-of-pairs
+     (g--replace-list-of-pairs
       (g--replace-list-of-pairs (g--c-defun-body)
                                 '(("get_group_id" . "g.get_group_id")
                                   ("get_local_id" . "it.get_local_id")
                                   ("barrier([^)]*)" . "it.barrier()")
                                   ("get_local_size" . "g.get_local_range")
-                                  ("global\\(.*\\) \\([^=\\n]+\\)[^\\n]*=" . "\\1 \\2=")))
-      ;; (g--zip search-regexps replacements))
+                                  ("global\\(.*\\) \\([^=\\n]+\\)[^\\n]*=" . "\\1 \\2=")
+                                  ("NDRange" . "AAA")))
+      (g--zip search-regexps replacements))
 
      "\n"
      "private:\n"
@@ -113,82 +114,48 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
     (g--functor-string-helper (called-interactively-p 'any))))
 
 
-(defun g--functor-call (point-on-kernel-invoke buffer)
-  (interactive (list (point) (buffer)))
-  (let ((functor-params)
-        (kernel-params (g--c-invocation-params)))
-    ;; (concat (c-defun-name) "CreateKernel<T>("
-    ;;         (mapcar #'(lambda (s)
+;; (defun g--functor-dispatch (point-in-driver-function buffer)
+;;   (interactive (list (point) (buffer)))
+;;   (let* ((functor-decl-list (g--params-list functor-decl-params))
+;;          (kernel-invoke-list (g--params-list kernel-invoke)))
+;;     (concat
+;;      "auto Q = getQueue();\n"
+;;      "  Q.submit([&](auto &h) {\n"
 
-    ;;                     )
-    ;;                 (cdr params))
-    ;;         ")"
-    )
-  )
+;;      (mapconcat #'(lambda (x) x)
+;;                 (seq-filter #'(lambda (x) (string-match "accessor" x))
+;;                             functor-decl-list)
+;;                 ";\n")
+;;      ";\n"
 
+;;      "  h.parallel_for(\n"
+;;      "     sycl::nd_range{global, local},\n"
 
-(defun g--functor-dispatch (point-in-driver-function buffer)
-  (interactive (list (point) (buffer)))
-  (let* ((functor-decl-list (g--params-list functor-decl-params))
-         (kernel-invoke-list (g--params-list kernel-invoke)))
-    (concat
-     "auto Q = getQueue();\n"
-     "  Q.submit([&](auto &h) {\n"
+;;      (cl-assert nil)   ;; not yet implemented
 
-     (mapconcat #'(lambda (x) x)
-                (seq-filter #'(lambda (x) (string-match "accessor" x))
-                            functor-decl-list)
-                ";\n")
-     ";\n"
+;;      ;; functor-name "CreateKernel<T>("
+;;      ;; (string-join
+;;      ;;  (seq-filter #'(lambda (x)
+;;      ;;                  (not (string-match "EnqueueArgs" x))
+;;      ;;                  )
+;;      ;;              kernel-invoke-list)
+;;       ",")
+;;      "));"
 
-     "  h.parallel_for(\n"
-     "     sycl::nd_range{global, local},\n"
-
-     (cl-assert nil)   ;; not yet implemented
-
-     ;; functor-name "CreateKernel<T>("
-     ;; (string-join
-     ;;  (seq-filter #'(lambda (x)
-     ;;                  (not (string-match "EnqueueArgs" x))
-     ;;                  )
-     ;;              kernel-invoke-list)
-      ",")
-     "));"
-
-     "\n"
-     "});"
-     ))
+;;      "\n"
+;;      "});"
+;;      ))
 
 
-(defun g--driver-string-helper (point-in-driver buffer)
-  (interactive (list (point) (buffer)))
-  (let (point-in-functor begin-of-driver end-of-driver)
-
-    ;; (setq point-in-functor
-    ;;       (save-excursion
-    ;;         (goto-char (point-min))
-    ;;         (re-search-forward "void +operator *()")
-    ;;         (forward-line 2)
-    ;;         (point)))
-
-    ;; ;; (replace-regexp-in-string regexp replacement string t)
-    ;; ;; (setq functor-call (g--gen-functor-call
-
-    ;; ;; need to convert the kernel invoke to a functor invoke
-    ;; (save-excursion
-    ;;   (goto-char (point-min))
-    ;;   )
-
-    ;; (g--c-invoke)    ;; assumes point is on function invoke
-    ;; (g--c-invoke-params)   ;; assumes point is on function invoke
-
-    ;; first pass: easy search replace in entire buffer
-    (save-excursion
+(defun g--driver-string-helper ()
+    (save-excursion   ;; assume we're in the driver function body
       (save-restriction
         (narrow-to-defun)
         (g--replace-list-of-pairs
          (buffer-string)
-         (list '("^ *auto +.*=[^;]*;" . "")
+         (list '("using +cl::[^;]*;" . "")
+               '("^ *auto +.*=[^;]*;" . "")
+               '("[^;]*emplace_back[^;]*;" . "")
                '("Param\\( +\\)" . "Param<T>\\1")
                '("using +std::vector *;" . "")
                '(" *std::array[^;]*;" . "")
@@ -196,23 +163,14 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
                '(" *vector[^;]*;" .  "")
                '("cl::NDRange local" . "auto local = sycl::range" )
                '("cl::NDRange global" . "auto global = sycl::range")
+               '("NDRange local" . "auto local = sycl::range" )
+               '("NDRange global" . "auto global = sycl::range")
                '("CL_DEBUG_FINISH" . "ONEAPI_DEBUG_FINISH")
-               ))
-        ) ;; save-restriction
-      ) ;; save-excursion
-
-    ;; second pass: generate functor invoke from kernel invoke
-    ;; (1) find EnqueueArgs( in driver to get point on kernel invoke
-    (save-excursion
-      (beginning-of-defun)
-      (re-search-forward "^.*EnqueueArgs[^;]*) *;")
-      (point))
-    ;; (g--functor-call kernel-invoke-pt (current-buffer))
-                   ;; (cons "^.*EnqueueArgs[^;]*;" (g--gen-functor-call functor-decl-params
-               ;;                                                   kernel-invoke
-               ;;                                                   functor-name))
-    ) ;; let
-  ) ;; defun
+               '("[^;]*EnqueueArgs([^;]*;" . ""))
+         )
+        )
+      )
+    )
 
 
 (defun g--driver-string (point-in-driver buffer)

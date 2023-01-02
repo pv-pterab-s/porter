@@ -31,7 +31,7 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;
 
 template<typename T>
 class tileCreateKernel {public:
-    tileCreateKernel(read_accessor<T> out, read_accessor<T> in, const KParam op, const KParam ip, const int blocksPerMatX, const int blocksPerMatY) : out_(out), in_(in), op_(op), ip_(ip), blocksPerMatX_(blocksPerMatX), blocksPerMatY_(blocksPerMatY) {}
+    tileCreateKernel(write_accessor<T> out, read_accessor<T> in, const KParam op, const KParam ip, const int blocksPerMatX, const int blocksPerMatY) : out_(out), in_(in), op_(op), ip_(ip), blocksPerMatX_(blocksPerMatX), blocksPerMatY_(blocksPerMatY) {}
     void operator()(sycl::nd_item<2> it) const {
         sycl::group g = it.get_group();
 
