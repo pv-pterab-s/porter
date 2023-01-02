@@ -21,36 +21,6 @@
       '(g--opencl-kernel-fn g--opencl-driver-fn g--oneapi-driver-fn))
 
 
-;; TEST-0 DRIVER GEN
-(with-current-buffer (find-file-noselect "unconverted-driver-but-with-functor.cpp")
-  (goto-char 2961)
-  ;; TODO test this
-  ;; (MM (g--driver-string (point) (current-buffer)))
-  )
-
-
-;; ;; TEST-0 EXTRACT C PARAMS FROM INVOCATIONS
-;; (with-current-buffer (find-file-noselect "unconverted-driver-but-with-functor.cpp")
-;;   (goto-char 3541)
-;;   (cl-assert
-;;    (string-equal
-;;     (g--c-invocation-params-string (point) (current-buffer))
-;;     "EnqueueArgs(getQueue(), global, local), *out.data, *in.data, out.info, in.info, blocksPerMatX, blocksPerMatY"))
-;;   (cl-assert
-;;    (equal
-;;     (g--c-invocation-params (point) (current-buffer))
-;;     '("EnqueueArgs(getQueue(), global, local)" "*out.data" "*in.data" "out.info" "in.info" "blocksPerMatX" "blocksPerMatY")))
-;;   )
-
-
-;; ;; TEST-1 PARSING FUNCTOR IN CURRENT FILE
-;; (with-current-buffer (find-file-noselect "unconverted-driver-but-with-functor.cpp")
-;;   (goto-char 3541) ;; expect the point to be on the kernel invocation
-;;   (cl-assert
-;;    (equal (g--functor-constructor-params (current-buffer))
-;;           '("write_accessor<T> out" "read_accessor<T> in" "const KParam op" "const KParam ip" "const int blocksPerMatX" "const int blocksPerMatY")))
-;;   )
-
 
 ;; TEST-1 G--ZIP
 (let ()
@@ -58,107 +28,122 @@
    (equal
     (g--zip '("doo" "da") '("flip" "fly"))
     '(("doo" . "flip") ("da" . "fly"))))
- )
+  )
 
 
-(defun g--functor-accessor-decls (functor-params invocation-params)
-  (let (accessor-ro-decls accessor-wo-decls)
-    (setq accessor-ro-decls
-          (mapconcat #'(lambda (pair)
-                         (concat "sycl::accessor d_"
-                                 (let ((str (cdr pair)))
-                                   (string-match "^[ *]*\\([^ .]*\\)" str)
-                                   (match-string 1 str))  ;; base struct name w/o field or ptr
-                                 "{" (cdr pair) ", h, sycl::read_only};"))
-                     (seq-filter #'(lambda (pair)
-                                     (string-match "read" (car pair)))
-                                 (g--zip functor-params invocation-params))
-                      "\n")
-          )
+;; TEST-1 C PARAM PARSING
+(with-current-buffer (find-file-noselect g--opencl-kernel-fn)
+  (goto-char 720)
+  (cl-assert
+   (equal (g--c-defun-params)
+          '("global T *out" "global const T *in" "const KParam op" "const KParam ip" "const int blocksPerMatX" "const int blocksPerMatY")))
+  (cl-assert
+   (equal (g--c-defun-params-types)
+          '("global T *" "global const T *" "const KParam" "const KParam" "const int" "const int")))
+  (cl-assert
+   (equal (g--c-defun-params-names)
+          '("out" "in" "op" "ip" "blocksPerMatX" "blocksPerMatY")))
+  )
 
-    (setq accessor-wo-decls
-          (mapconcat #'(lambda (pair)
-                         (concat "sycl::accessor d_"
-                                 (let ((str (cdr pair)))
-                                   (string-match "^[ *]*\\([^ .]*\\)" str)
-                                   (match-string 1 str))
-                                 "{" (cdr pair) ", h, sycl::write_only, sycl::no_init};"))
-                     (seq-filter #'(lambda (pair)
-                                     (string-match "write" (car pair)))
-                                 (g--zip functor-params invocation-params)) "\n"))
 
-    (concat accessor-ro-decls "\n" accessor-wo-decls "\n")
-    )
+;; TEST-0 EXTRACT C PARAMS FROM INVOCATIONS
+(with-current-buffer (find-file-noselect "unconverted-driver-but-with-functor.cpp")
+  (goto-char 3541)
+  (cl-assert
+   (string-equal
+    (g--c-invocation-params-string (point) (current-buffer))
+    "EnqueueArgs(getQueue(), global, local), *out.data, *in.data, out.info, in.info, blocksPerMatX, blocksPerMatY"))
+  (cl-assert
+   (equal
+    (g--c-invocation-params (point) (current-buffer))
+    '("EnqueueArgs(getQueue(), global, local)" "*out.data" "*in.data" "out.info" "in.info" "blocksPerMatX" "blocksPerMatY")))
+  )
+
+
+;; TEST-1 PARSING FUNCTOR IN CURRENT FILE
+(with-current-buffer (find-file-noselect "unconverted-driver-but-with-functor.cpp")
+  (goto-char 3541) ;; expect the point to be on the kernel invocation
+  (cl-assert
+   (equal (g--functor-constructor-params (current-buffer))
+          '("write_accessor<T> out" "read_accessor<T> in" "const KParam op" "const KParam ip" "const int blocksPerMatX" "const int blocksPerMatY")))
   )
 
 
 ;; TEST-1 ACCESSOR DECLS WORK
-(with-current-buffer (find-file-noselect "unconverted-driver-but-with-functor.cpp")
-  (goto-char 3541)
-  (let ((functor-params (g--functor-constructor-params (current-buffer)))
-        (invocation-params (cdr (g--c-invocation-params (point) (current-buffer))))
-        (accessor-decls))
-    (cl-assert
-     (string=
-      (g--functor-accessor-decls functor-params invocation-params)
-      "sycl::accessor d_in{*in.data, h, sycl::read_only};
+(cl-assert
+ (string=
+  (g--driver-accessor-decls 3541 (find-file-noselect "unconverted-driver-but-with-functor.cpp"))
+  "sycl::accessor d_in{*in.data, h, sycl::read_only};
 sycl::accessor d_out{*out.data, h, sycl::write_only, sycl::no_init};
 "
-      ))))
+  ))
 
 
-;; TEST-1 GENERATE FUNCTOR CALL FROM KERNEL INVOKE
-(with-current-buffer (find-file-noselect "unconverted-driver-but-with-functor.cpp")
-  ;;   (goto-char 3541) ;; expect the point to be on the kernel invocation
+;; TEST-1 FUNCTOR PARAMS GENERATION
+(cl-assert
+ (string=
+  (g--functor-invoke-param-string 3541 (find-file-noselect "unconverted-driver-but-with-functor.cpp"))
+  "d_out, d_in, out.info, in.info, blocksPerMatX, blocksPerMatY"
+  ))
 
-  ;; (M "I WAS HERE")
 
-;;   ;; invoke params
-;;   (let ((functor-params (g--functor-constructor-params (current-buffer)))
-;;         (invocation-params (cdr (g--c-invocation-params (point) (current-buffer))))
-;;         (functor-invoke-params)
-;;         (functor-accessor-decls))
+;; TEST-1 FUNCTOR DISPATCH GENERATION
+(cl-assert
+ (string=
+  (g--functor-dispatch 3541 (find-file-noselect "unconverted-driver-but-with-functor.cpp"))
+  "getQueue().submit([&](auto &h) {
+sycl::accessor d_in{*in.data, h, sycl::read_only};
+sycl::accessor d_out{*out.data, h, sycl::write_only, sycl::no_init};
+h.parallel_for(
+  sycl::nd_range{global, local},
+  tileCreateKernel<T>(d_out, d_in, out.info, in.info, blocksPerMatX, blocksPerMatY));
+});"))
 
-;;     (
 
-;;         ;; (setq functor-invoke-params
-;;         ;;       )
-;;         )
+;; TEST-1 DRIVER FUNCTION GEN
+(cl-assert
+ (string=
+  (g--driver-string 3541 (find-file-noselect "unconverted-driver-but-with-functor.cpp"))
+ "template<typename T>
+void tile(Param<T> out, const Param<T> in) {
 
-  ;; ;; invocation itself
-  ;; (let ((functor-params (g--functor-constructor-params (current-buffer)))
-  ;;       (invocation-params (cdr (g--c-invocation-params (point) (current-buffer)))))
 
-  ;;       (concat
-  ;;        "getQueue().submit([&](auto &h) {\n"
-  ;;        ;; accessor decls
-  ;;        "h.parallel_for(\n"
-  ;;        "  sycl::nd_range{global, local},\n"
-  ;;        "  " (concat g--function-to-port "CreateKernel<T>(")
-  ;;        "));\n"
-  ;;        "});")
-  ;;   )
-  )
+    using std::string;
 
-;; ;; TEST-1 C PARAM PARSING
-;; (with-current-buffer (find-file-noselect g--opencl-kernel-fn)
-;;   (goto-char 720)
-;;   (cl-assert
-;;    (equal (g--c-defun-params)
-;;           '("global T *out" "global const T *in" "const KParam op" "const KParam ip" "const int blocksPerMatX" "const int blocksPerMatY")))
-;;   (cl-assert
-;;    (equal (g--c-defun-params-types)
-;;           '("global T *" "global const T *" "const KParam" "const KParam" "const int" "const int")))
-;;   (cl-assert
-;;    (equal (g--c-defun-params-names)
-;;           '("out" "in" "op" "ip" "blocksPerMatX" "blocksPerMatY")))
-;;   )
+
+    constexpr int TX    = 32;
+    constexpr int TY    = 8;
+    constexpr int TILEX = 512;
+    constexpr int TILEY = 32;
 
 
 
 
-;; ;; (0) user harnesses af
-;; (g-harness-arrayfire "~/tile-af")
+
+
+    auto local = sycl::range(TX, TY, 1);
+
+    int blocksPerMatX = divup(out.info.dims[0], TILEX);
+    int blocksPerMatY = divup(out.info.dims[1], TILEY);
+    auto global = sycl::range(local[0] * blocksPerMatX * out.info.dims[2],
+                   local[1] * blocksPerMatY * out.info.dims[3], 1);
+
+getQueue().submit([&](auto &h) {
+sycl::accessor d_in{*in.data, h, sycl::read_only};
+sycl::accessor d_out{*out.data, h, sycl::write_only, sycl::no_init};
+h.parallel_for(
+  sycl::nd_range{global, local},
+  tileCreateKernel<T>(d_out, d_in, out.info, in.info, blocksPerMatX, blocksPerMatY));
+});
+
+    ONEAPI_DEBUG_FINISH(getQueue());
+}
+"))
+
+
+
+;; (0) user harnesses af
+(g-harness-arrayfire "~/tile-af")
 
 
 

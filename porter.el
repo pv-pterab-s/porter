@@ -107,81 +107,104 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
     )
   )
 
-(defun g--functor-string (point-in-kernel buffer)
+
+
+
+
+
+(defun g--driver-accessor-decls (point-on-invocation buffer)
   (interactive (list (point) (current-buffer)))
-  (with-current-buffer buffer
-    (goto-char point-in-kernel)
-    (g--functor-string-helper (called-interactively-p 'any))))
 
+  (let ((functor-params (g--functor-constructor-params buffer))
+        (invocation-params (cdr (g--c-invocation-params point-on-invocation buffer))))
 
-;; (defun g--functor-dispatch (point-in-driver-function buffer)
-;;   (interactive (list (point) (buffer)))
-;;   (let* ((functor-decl-list (g--params-list functor-decl-params))
-;;          (kernel-invoke-list (g--params-list kernel-invoke)))
-;;     (concat
-;;      "auto Q = getQueue();\n"
-;;      "  Q.submit([&](auto &h) {\n"
+    (let (accessor-ro-decls accessor-wo-decls)
+      (setq accessor-ro-decls
+            (mapconcat #'(lambda (pair)
+                           (concat "sycl::accessor d_"
+                                   (let ((str (cdr pair)))
+                                     (string-match "^[ *]*\\([^ .]*\\)" str)
+                                     (match-string 1 str))  ;; base struct name w/o field or ptr
+                                   "{" (cdr pair) ", h, sycl::read_only};"))
+                       (seq-filter #'(lambda (pair)
+                                       (string-match "read" (car pair)))
+                                   (g--zip functor-params invocation-params))
+                       "\n")
+            )
 
-;;      (mapconcat #'(lambda (x) x)
-;;                 (seq-filter #'(lambda (x) (string-match "accessor" x))
-;;                             functor-decl-list)
-;;                 ";\n")
-;;      ";\n"
+      (setq accessor-wo-decls
+            (mapconcat #'(lambda (pair)
+                           (concat "sycl::accessor d_"
+                                   (let ((str (cdr pair)))
+                                     (string-match "^[ *]*\\([^ .]*\\)" str)
+                                     (match-string 1 str))
+                                   "{" (cdr pair) ", h, sycl::write_only, sycl::no_init};"))
+                       (seq-filter #'(lambda (pair)
+                                       (string-match "write" (car pair)))
+                                   (g--zip functor-params invocation-params)) "\n"))
 
-;;      "  h.parallel_for(\n"
-;;      "     sycl::nd_range{global, local},\n"
-
-;;      (cl-assert nil)   ;; not yet implemented
-
-;;      ;; functor-name "CreateKernel<T>("
-;;      ;; (string-join
-;;      ;;  (seq-filter #'(lambda (x)
-;;      ;;                  (not (string-match "EnqueueArgs" x))
-;;      ;;                  )
-;;      ;;              kernel-invoke-list)
-;;       ",")
-;;      "));"
-
-;;      "\n"
-;;      "});"
-;;      ))
-
-
-(defun g--driver-string-helper ()
-    (save-excursion   ;; assume we're in the driver function body
-      (save-restriction
-        (narrow-to-defun)
-        (g--replace-list-of-pairs
-         (buffer-string)
-         (list '("using +cl::[^;]*;" . "")
-               '("^ *auto +.*=[^;]*;" . "")
-               '("[^;]*emplace_back[^;]*;" . "")
-               '("Param\\( +\\)" . "Param<T>\\1")
-               '("using +std::vector *;" . "")
-               '(" *std::array[^;]*;" . "")
-               '(" *std::vector[^;]*;" .  "")
-               '(" *vector[^;]*;" .  "")
-               '("cl::NDRange local" . "auto local = sycl::range" )
-               '("cl::NDRange global" . "auto global = sycl::range")
-               '("NDRange local" . "auto local = sycl::range" )
-               '("NDRange global" . "auto global = sycl::range")
-               '("CL_DEBUG_FINISH" . "ONEAPI_DEBUG_FINISH")
-               '("[^;]*EnqueueArgs([^;]*;" . ""))
-         )
-        )
+      (concat accessor-ro-decls "\n" accessor-wo-decls "\n")
       )
     )
+  )
 
 
-(defun g--driver-string (point-in-driver buffer)
+(defun g--driver-string-first-filter (string)
+  (g--replace-list-of-pairs
+   string
+   (list '("using +cl::[^;]*;" . "")
+         '("^ *auto +.*=[^;]*;" . "")
+         '("[^;]*emplace_back[^;]*;" . "")
+         '("Param\\( +\\)" . "Param<T>\\1")
+         '("using +std::vector *;" . "")
+         '(" *std::array[^;]*;" . "")
+         '(" *std::vector[^;]*;" .  "")
+         '(" *vector[^;]*;" .  "")
+         '("cl::NDRange local" . "auto local = sycl::range" )
+         '("cl::NDRange global" . "auto global = sycl::range")
+         '("NDRange local" . "auto local = sycl::range" )
+         '("NDRange global" . "auto global = sycl::range")
+         '("CL_DEBUG_FINISH" . "ONEAPI_DEBUG_FINISH"))))
+
+
+(defun g--functor-invoke-param-string (point-on-invoke buffer)  ;; conversion from opencl. not the dispatch
   (interactive (list (point) (current-buffer)))
-  (with-current-buffer buffer
-    (goto-char point-in-driver)
-    (g--driver-string-helper)))
+  (let* ((invoke-params (g--c-invocation-params point-on-invoke buffer))
+         (functor-params (g--functor-constructor-params buffer))
+         (param-kinds (mapcar #'(lambda (param)
+                                  (cond ((string-match "read.*accessor" param) "READ")
+                                        ((string-match "write.*accessor" param) "WRITE")
+                                        (t "normal"))) functor-params)))
+
+    (string-join
+     (mapcar* #'(lambda (invoke-param functor-param kind)
+                  (if (not (string-equal kind "normal"))
+                      (concat "d_" (g--first-match "^[ *]*\\([^ .]*\\)" invoke-param))
+                    invoke-param)
+                  )
+              (cdr invoke-params) functor-params param-kinds)
+     ", "
+     )
+    )
+  )
+
+
+(defun g--functor-dispatch (point-on-invoke buffer)
+  (interactive (list (point) (current-buffer)))
+  (save-excursion
+    (with-current-buffer buffer
+      (concat
+       "getQueue().submit([&](auto &h) {\n"
+       (g--driver-accessor-decls point-on-invoke buffer)
+       "h.parallel_for(\n"
+       "  sycl::nd_range{global, local},\n"
+       "  " (concat g--function-to-port "CreateKernel<T>(")
+       (g--functor-invoke-param-string point-on-invoke buffer)
+       "));\n"
+       "});"))))
 
 
 ;; \TODO steps of port  e.g.  "C-c 1", "C-c 2", etc
-
 (global-set-key (kbd "M-1") #'(lambda () (interactive) (find-file g--opencl-driver-fn)))
 (global-set-key (kbd "M-2") #'(lambda () (interactive) (find-file g--opencl-kernel-fn)))
 (global-set-key (kbd "M-3") #'(lambda () (interactive) (find-file g--oneapi-driver-fn)))

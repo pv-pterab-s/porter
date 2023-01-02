@@ -143,23 +143,28 @@
                                     (progn (end-of-defun) (point)))))
 
 
-
 (defun g--c-invocation-params-string (point-at-invocation buffer)
   (interactive (list (point) (current-buffer)))
-  (g--replace-list-of-pairs
-   (buffer-substring-no-properties
-    (save-excursion (re-search-forward ";") (point))
+  (with-current-buffer buffer
     (save-excursion
-      (re-search-forward ";")
-      (re-search-backward ")")
-      (forward-char)
-      (backward-sexp)
-      (point)
-      ))
-   '(("^ *(" . "")
-     (")[^);]*; *$" . "")
-     ("\n" . "")
-     (" +" . " "))))
+      (goto-char point-at-invocation)
+      (g--replace-list-of-pairs
+       (buffer-substring-no-properties
+        (save-excursion (re-search-forward ";") (point))
+        (save-excursion
+          (re-search-forward ";")
+          (re-search-backward ")")
+          (forward-char)
+          (backward-sexp)
+          (point)
+          ))
+       '(("^ *(" . "")
+         (")[^);]*; *$" . "")
+         ("\n" . "")
+         (" +" . " ")))
+      )
+    )
+  )
 
 (defun g--c-invocation-params (point-at-invocation buffer)
   (interactive (list (point) (current-buffer)))
@@ -238,13 +243,15 @@
     ))
 
 (defun g--functor-constructor-params (buffer)   ;; assume only on of these in the buffer
-  (interactive (list (buffer)))
-  (save-excursion
-    (goto-char (point-min))
-    (re-search-forward "class")  ;; find first class
-    ;; (re-search-forward "{") (backward-char) (forward-sexp)
-    (re-search-forward ":[^{]*{ *}")   ;; constructor has empty body
-    (g--c-defun-params)
+  (interactive (list (current-buffer)))
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (re-search-forward "class")  ;; find first class
+      ;; (re-search-forward "{") (backward-char) (forward-sexp)
+      (re-search-forward ":[^{]*{ *}")   ;; constructor has empty body
+      (g--c-defun-params)
+      )
     )
   )
 
