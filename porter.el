@@ -160,11 +160,12 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
          '(" *std::array[^;]*;" . "")
          '(" *std::vector[^;]*;" .  "")
          '(" *vector[^;]*;" .  "")
-         '("cl::NDRange local" . "auto local = sycl::range" )
-         '("cl::NDRange global" . "auto global = sycl::range")
-         '("NDRange local" . "auto local = sycl::range" )
-         '("NDRange global" . "auto global = sycl::range")
-         '("CL_DEBUG_FINISH" . "ONEAPI_DEBUG_FINISH"))))
+         '("CL_DEBUG_FINISH" . "ONEAPI_DEBUG_FINISH")
+         '(
+           "NDRange +\\([^ ]+\\) *(\\([^,]+\\),\\([^,]+\\),\\([^,]+\\))[;]*;" .
+           "auto \\1 = sycl::range(\\2,\\3);"
+           )
+         )))
 
 
 (defun g--functor-invoke-param-string (point-on-invoke buffer)  ;; conversion from opencl. not the dispatch

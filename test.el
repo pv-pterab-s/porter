@@ -1,6 +1,4 @@
 ;;; -*- lexical-binding: t; my-lisp-to-evaluate: "(gallagher-eval-buffer \"/home/gpryor/porter/test.el\")"; -*-
-(setq g--testing t)
-
 (gallagher-eval-buffer "g-utils.el")
 (gallagher-eval-buffer "porter.el")
 
@@ -121,12 +119,12 @@ void tile(Param<T> out, const Param<T> in) {
 
 
 
-    auto local = sycl::range(TX, TY, 1);
+    auto local = sycl::range(TX, TY);
 
     int blocksPerMatX = divup(out.info.dims[0], TILEX);
     int blocksPerMatY = divup(out.info.dims[1], TILEY);
     auto global = sycl::range(local[0] * blocksPerMatX * out.info.dims[2],
-                   local[1] * blocksPerMatY * out.info.dims[3], 1);
+                   local[1] * blocksPerMatY * out.info.dims[3]);
 
 getQueue().submit([&](auto &h) {
 sycl::accessor d_in{*in.data, h, sycl::read_only};
@@ -148,12 +146,13 @@ h.parallel_for(
 
 
 ;; END TO END FINAL TEST is disabled while we sort out some subroutines
-(if nil
+(if t
     (let (driver-shell functor driver pt-in-opencl-driver)
-      ;; (M "===========")
+      (M "===========")
 
       ;; (1) user generates oneapi driver shell and pastes into oneapi driver
-      (setq driver-shell (g--oneapi-driver-shell (find-file-noselect g--opencl-driver-fn)))  ;; AUTO
+      (setq driver-shell       ;; USER MUST put cursor anywhere in opencl driver buffer
+            (g--oneapi-driver-shell (find-file-noselect g--opencl-driver-fn)))
       (kill-new driver-shell)
 
       ;; (2) user pastes driver
@@ -161,7 +160,8 @@ h.parallel_for(
         (erase-buffer) (yank) (save-buffer))
 
       ;; (1) user generates functor and copies it
-      (setq functor (g--functor-string 720 (find-file-noselect g--opencl-kernel-fn)))  ;; AUTO
+      (setq functor    ;; USER MUST cursor inside of kernel
+            (g--functor-string 720 (find-file-noselect g--opencl-kernel-fn)))
       (kill-new functor)
 
       ;; (3) user pastes functor into driver below write_accessor
@@ -174,13 +174,14 @@ h.parallel_for(
       (setq pt-in-opencl-driver
             (with-current-buffer (find-file-noselect g--oneapi-driver-fn)
               (goto-char (point-min)) (re-search-forward "void +tile") (forward-line 3) (point)))
-      ;; (M "step 4 complete")
+      (M "step 4 complete")
 
       ;; (5) user generates driver and copies
-      (setq driver (g--driver-string pt-in-opencl-driver (find-file-noselect g--oneapi-driver-fn)))
+      (setq driver   ;; USER MUST cursor inside of opencl driver function
+            (g--driver-string pt-in-opencl-driver (find-file-noselect g--oneapi-driver-fn)))
       (kill-new driver)
 
-      ;; (7) user replaces old driver with new driver (from kill ring)
+      ;; (6) user replaces old driver with new driver (from kill ring)
       (with-current-buffer (find-file-noselect g--oneapi-driver-fn)
         (goto-char pt-in-opencl-driver)   ;; emulate user
         (save-excursion
@@ -189,9 +190,10 @@ h.parallel_for(
             (delete-region (point-min) (point-max))  ;; kill old driver
             (yank)  ;; paste new driver
             ))
-        (save-buffer)
-        (MM (buffer-string)))
+        (save-buffer))
 
       ;; (7) compile
-      ;; (compile "cd ~/tile-af/build && make")
-      ))
+      ;; (compile "cd ~/tile-af/build && make VERBOSE=1")
+      (compile "cd /home/gpryor/tile-af/build/src/backend/oneapi && /opt/intel/oneapi/compiler/2022.2.1/linux/bin/icpx -DAFDLL -DAF_CACHE_KERNELS_TO_DISK -DAF_MKL_INTERFACE_SIZE=4 -DAF_MKL_THREAD_LAYER=2 -DAF_ONEAPI -DAF_WITH_LOGGING -DBOOST_ALL_NO_LIB -DBOOST_CHRONO_HEADER_ONLY -DBOOST_COMPUTE_HAVE_THREAD_LOCAL -DBOOST_COMPUTE_THREAD_SAFE -DOS_LNX -Dafoneapi_EXPORTS -I/home/gpryor/tile-af/include -I/home/gpryor/tile-af/build/include -I/home/gpryor/tile-af/src/backend/oneapi -I/home/gpryor/tile-af/src/api/c -I/home/gpryor/tile-af/src/backend -I/home/gpryor/tile-af/build/src/backend -isystem /home/gpryor/tile-af/build/extern/af_forge-src/include -isystem /home/gpryor/tile-af/build/extern/af_forge-build/include -isystem /home/gpryor/tile-af/build/extern/spdlog-src/include -isystem /home/gpryor/tile-af/build/extern/span-lite-src/include -isystem /home/gpryor/tile-af/build/extern/af_glad-src/include -isystem /home/gpryor/tile-af/extern/half/include -w -g -fPIC -fvisibility=hidden -Wno-unqualified-std-cast-call -Werror=reorder-ctor -fp-model precise -fsycl -Wno-ignored-attributes -Wall -std=c++17 -MD -MT src/backend/oneapi/CMakeFiles/afoneapi.dir/tile.cpp.o -MF CMakeFiles/afoneapi.dir/tile.cpp.o.d -o CMakeFiles/afoneapi.dir/tile.cpp.o -c /home/gpryor/tile-af/src/backend/oneapi/tile.cpp")
+      )
+ )
