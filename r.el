@@ -8,22 +8,34 @@
 ;; (with-current-buffer (find-file-noselect "unconverted-driver-but-with-functor.cpp")
 ;;   (goto-char 3541) ;; expect the point to be on the kernel invocation
 
-(defun g--driver-string-replace-ndrange (string)
-  (replace-regexp-in-string
-   "NDRange +\\([^ ]+\\) *(\\([^,]+\\),\\([^,]+\\),\\([^,]+\\))[;]*;"
-   "auto \\1 = sycl::range(\\2, \\3);"
-   string t)
-  )
 
 (with-current-buffer (find-file-noselect "unconverted-driver-but-with-functor.cpp")
   (goto-char 3541)
-  (save-excursion
-    (save-restriction
-      (narrow-to-defun)
-      (MM
-       (g--driver-string-first-filter (buffer-string))
-       ;; (g--driver-string-replace-ndrange (buffer-string))
+
+  ;; has to have entire buffer
+  ;; (g--functor-dispatch (point) (current-buffer)))
+
+  (let ((driver-string
+         (buffer-substring-no-properties
+          (save-excursion (beginning-of-defun) (point))
+          (save-excursion (end-of-defun) (point))))
+        )
+    (MM
+     (replace-regexp-in-string
+      "[^;]*EnqueueArgs([^;]*;"
+      (concat
+       "\n\n"
+       (g--functor-dispatch (point) (current-buffer))
+       "\n"
        )
-      )
+      (g--driver-string-first-filter driver-string))
+
+     )
     )
   )
+
+       ;; (let* ((first-filtered (g--driver-string-first-filter (buffer-string)))
+       ;;        (dispatch (g--functor-dispatch (point) (current-buffer))))
+
+;;   ;; first-filtered
+       ;;   )

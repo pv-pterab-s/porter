@@ -105,6 +105,7 @@
     (save-excursion
       (goto-char point-at-invocation)
       (g--replace-list-of-pairs
+
        (buffer-substring-no-properties
         (save-excursion (re-search-forward ";") (point))
         (save-excursion
@@ -119,6 +120,7 @@
          ("\n" . "")
          (" +" . " ")))
       )
+
     )
   )
 

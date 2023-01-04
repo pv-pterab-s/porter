@@ -8,7 +8,7 @@
   (setq g--function-to-port (replace-regexp-in-string "-af$" "" (file-name-nondirectory g--arrayfire-dir)))
   (setq g--opencl-kernel-fn (concat g--arrayfire-dir "/src/backend/opencl/kernel/" g--function-to-port ".cl"))
   (setq g--opencl-driver-fn (concat g--arrayfire-dir "/src/backend/opencl/kernel/" g--function-to-port ".hpp"))
-  (setq g--oneapi-driver-fn (replace-regexp-in-string "opencl/" "oneapi/" (g--opencl-driver-fn)))
+  (setq g--oneapi-driver-fn (replace-regexp-in-string "opencl/" "oneapi/" g--opencl-driver-fn))
 
   (message (concat "harnessed arrayfire at " g--arrayfire-dir " function " g--function-to-port))
   )
@@ -108,8 +108,11 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
   )
 
 
-
-
+(defun g--functor-string (point-in-kernel buffer)
+  (interactive (list (point) (current-buffer)))
+  (with-current-buffer buffer
+    (goto-char point-in-kernel)
+    (g--functor-string-helper (called-interactively-p 'any))))
 
 
 (defun g--driver-accessor-decls (point-on-invocation buffer)
@@ -150,22 +153,25 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
 
 
 (defun g--driver-string-first-filter (string)
-  (g--replace-list-of-pairs
-   string
-   (list '("using +cl::[^;]*;" . "")
-         '("^ *auto +.*=[^;]*;" . "")
-         '("[^;]*emplace_back[^;]*;" . "")
-         '("Param\\( +\\)" . "Param<T>\\1")
-         '("using +std::vector *;" . "")
-         '(" *std::array[^;]*;" . "")
-         '(" *std::vector[^;]*;" .  "")
-         '(" *vector[^;]*;" .  "")
-         '("CL_DEBUG_FINISH" . "ONEAPI_DEBUG_FINISH")
-         '(
-           "NDRange +\\([^ ]+\\) *(\\([^,]+\\),\\([^,]+\\),\\([^,]+\\))[;]*;" .
-           "auto \\1 = sycl::range(\\2,\\3);"
-           )
-         )))
+  (replace-regexp-in-string
+   " *$" ""
+   (g--replace-list-of-pairs
+    string
+    (list '("using +cl::[^;]*;" . "")
+          '("^ *auto +.*=[^;]*;" . "")
+          '("[^;]*emplace_back[^;]*;" . "")
+          '("Param\\( +\\)" . "Param<T>\\1")
+          '("using +std::vector *;" . "")
+          '(" *std::array[^;]*;" . "")
+          '(" *std::vector[^;]*;" .  "")
+          '(" *vector[^;]*;" .  "")
+          '("CL_DEBUG_FINISH" . "ONEAPI_DEBUG_FINISH")
+          '(
+            "NDRange +\\([^ ]+\\) *(\\([^,]+\\),\\([^,]+\\),\\([^,]+\\))[;]*;" .
+            "auto \\1 = sycl::range(\\2,\\3);"
+            )
+          )))
+  )
 
 
 (defun g--functor-invoke-param-string (point-on-invoke buffer)  ;; conversion from opencl. not the dispatch
@@ -205,7 +211,36 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
        "});"))))
 
 
+(defun g--driver-string (point-on-invoke buffer)
+  (interactive (list (point) (current-buffer)))
+  (with-current-buffer buffer
+    (save-excursion
+      (let ((driver-string
+             (buffer-substring-no-properties
+              (save-excursion (beginning-of-defun) (point))
+              (save-excursion (end-of-defun) (point))))
+            )
+         (replace-regexp-in-string
+          "[^;]*EnqueueArgs([^;]*;"
+          (concat
+           "\n\n"
+           (g--functor-dispatch point-on-invoke buffer)
+           "\n"
+           )
+          (g--driver-string-first-filter driver-string))
+         ))
+      )
+    )
+
+
 ;; \TODO steps of port  e.g.  "C-c 1", "C-c 2", etc
 (global-set-key (kbd "M-1") #'(lambda () (interactive) (find-file g--opencl-driver-fn)))
 (global-set-key (kbd "M-2") #'(lambda () (interactive) (find-file g--opencl-kernel-fn)))
 (global-set-key (kbd "M-3") #'(lambda () (interactive) (find-file g--oneapi-driver-fn)))
+
+
+(global-set-key (kbd "C-1") #'(lambda () (interactive)
+                                (setq header-line-format "Harness Arrayfire Directory (use C-c h)")
+                                (set-face-attribute 'header-line nil :background "DarkGreen")
+                                (global-set-key (kbd "C-c h") #'(lambda () ))
+                                ))
