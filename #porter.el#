@@ -288,7 +288,7 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
 (global-set-key (kbd "C-c 4")
                 #'(lambda () (interactive)
                     (find-file g--opencl-kernel-fn)
-                    (setq header-line-format "create functor from inside opencl kernel (use C-c h) C-c 5")
+                    (setq header-line-format "point in opencl kernel. make  (use C-c h) C-c 5")
                     (set-face-attribute 'header-line nil
                                         :background "DarkGreen"
                                         :foreground "White")

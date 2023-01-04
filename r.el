@@ -2,40 +2,46 @@
 (gallagher-eval-buffer "g-utils.el")
 (gallagher-eval-buffer "porter.el")
 
-;; (MM (g--driver-string 3541 (find-file-noselect "unconverted-driver-but-with-functor.cpp")))
 
-;; ;; TEST-1 GENERATE FUNCTOR CALL FROM KERNEL INVOKE
-;; (with-current-buffer (find-file-noselect "unconverted-driver-but-with-functor.cpp")
-;;   (goto-char 3541) ;; expect the point to be on the kernel invocation
+(defun g--driver-point-on-invoke (point-in-opencl-driver buffer)
+  (interactive (list (point) (current-buffer)))
+  (with-current-buffer buffer
+    (save-excursion
+      (let ((end (save-excursion (end-of-defun) (point))))
+        (beginning-of-defun)
+        (re-search-forward "EnqueueArgs(.*getQueue[^;]*;")
+        (match-beginning 0)
+        )))
+  )
 
-
-(with-current-buffer (find-file-noselect "unconverted-driver-but-with-functor.cpp")
-  (goto-char 3541)
-
-  ;; has to have entire buffer
-  ;; (g--functor-dispatch (point) (current-buffer)))
-
+(defun g--driver (point-in-opencl-driver buffer)
+  (interactive (list (point) (current-buffer)))
   (let ((driver-string
          (buffer-substring-no-properties
           (save-excursion (beginning-of-defun) (point))
-          (save-excursion (end-of-defun) (point))))
-        )
-    (MM
-     (replace-regexp-in-string
-      "[^;]*EnqueueArgs([^;]*;"
-      (concat
-       "\n\n"
-       (g--functor-dispatch (point) (current-buffer))
-       "\n"
-       )
-      (g--driver-string-first-filter driver-string))
-
-     )
+          (save-excursion (end-of-defun) (point)))))
+    (replace-regexp-in-string
+     "[^;]*EnqueueArgs([^;]*;"
+     (concat
+      "\n\n"    ;; vvv cursor _must_ be on the opencl kernel dispatch
+      (g--functor-dispatch (g--driver-point-on-invoke
+                            point-in-opencl-driver buffer))
+      "\n"
+      )
+     (g--driver-string-first-filter driver-string))
     )
   )
 
-       ;; (let* ((first-filtered (g--driver-string-first-filter (buffer-string)))
-       ;;        (dispatch (g--functor-dispatch (point) (current-buffer))))
 
-;;   ;; first-filtered
-       ;;   )
+(with-current-buffer (find-file-noselect "unconverted-driver-but-with-functor.cpp")
+  (let (pt-in-opencl-driver)
+    (setq pt-in-opencl-driver   ;; simulating user
+          (with-current-buffer (find-file-noselect g--oneapi-driver-fn)
+            (goto-char (point-min))
+            (re-search-forward "void +tile")
+            (forward-line 3) (point)))
+
+    (M (g--driver-string (point) (current-buffer)))
+
+    )
+  )
