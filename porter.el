@@ -296,6 +296,7 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
                                         :background "DarkGreen"
                                         :foreground "White")
                     (global-set-key (kbd "C-c h") #'(lambda (pt buffer)
+                                                      (interactive (list (point) (current-buffer)))
                                                       (kill-new (MM (g--functor-string pt buffer)))
                                                       ))
                     )
