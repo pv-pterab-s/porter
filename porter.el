@@ -254,41 +254,44 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
                 #'(lambda (arrayfire-dir)
                     (interactive "Denter arrayfire clone directory: ")
                     (g-harness-arrayfire arrayfire-dir)
-                    (setq header-line-format "goto next step with C-c 2")
-                    ;; (set-face-attribute 'header-line nil
-                    ;;                     :background "DarkGreen"
-                    ;;                     :foreground "White")
-                    ))
+                    ;; (setq header-line-format "goto next step with C-c 2")
+                    (message (concat "harnessed " g--arrayfire-dir " function " g--function-to-port
+                                     " goto step C-c 2"))
+                    )
+                )
 
 (global-set-key (kbd "C-c 2")
                 #'(lambda () (interactive)
                     (find-file g--opencl-driver-fn)
-                    (setq header-line-format "generate driver shell (use C-c h). goto next step C-c 3")
+                    (let ((driver-shell (g--oneapi-driver-shell (find-file-noselect g--opencl-driver-fn))))
+                      (kill-new (MM driver-shell))
+                      )
+                    (setq header-line-format "generated driver-shell. goto next step C-c 3")
                     (set-face-attribute 'header-line nil
                                         :background "DarkGreen"
                                         :foreground "White")
-                    (global-set-key (kbd "C-c h")
-                                    #'(lambda ()
-                                        (interactive)
-                                        (let ((driver-shell (g--oneapi-driver-shell (find-file-noselect g--opencl-driver-fn))))
-                                          (kill-new (MM driver-shell))
-                                          )))
-                    )
-                )
+                    ))
+                    ;; (global-set-key (kbd "C-c h")
+                    ;;                 #'(lambda ()
+                    ;;                     (interactive)
+                    ;;                     (let ((driver-shell (g--oneapi-driver-shell (find-file-noselect g--opencl-driver-fn))))
+                    ;;                       (kill-new (MM driver-shell))
+
 
 (global-set-key (kbd "C-c 3")
                 #'(lambda () (interactive)
                     (find-file g--oneapi-driver-fn)
-                    (setq header-line-format "paste driver into oneapi driver file (use C-y). next step C-c 4")
+                    (setq header-line-format "paste driver-shell into oneapi file (use C-y). next step C-c 4")
                     (set-face-attribute 'header-line nil
                                         :background "DarkGreen"
                                         :foreground "White")
+                    )
                 )
 
 (global-set-key (kbd "C-c 4")
                 #'(lambda () (interactive)
                     (find-file g--opencl-kernel-fn)
-                    (setq header-line-format "create functor from inside opencl kernel (use C-c h) C-c 5")
+                    (setq header-line-format "gen functor from point in opencl kernel (use C-c h) C-c 5")
                     (set-face-attribute 'header-line nil
                                         :background "DarkGreen"
                                         :foreground "White")
@@ -298,10 +301,19 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
                     )
                 )
 
-(global-set-key (kbd "C-c 6")
+(global-set-key (kbd "C-c 5")
                 #'(lambda () (interactive)
                     (find-file g--oneapi-driver-fn)
-                    (setq header-line-format "paste driver. delete old one. try to compile")
+                    (setq header-line-format "paste functor. (use C-y) next step C-c 6")
+                    (set-face-attribute 'header-line nil
+                                        :background "DarkGreen"
+                                        :foreground "White")
+                    )
+                )
+
+(global-set-key (kbd "C-c 6")
+                #'(lambda () (interactive)
+                    (setq header-line-format "gen driver from shell (use C-c h). replace old. (build?)")
                     (set-face-attribute 'header-line nil
                                         :background "DarkGreen"
                                         :foreground "White")
