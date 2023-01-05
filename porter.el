@@ -317,3 +317,7 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
                                         :foreground "White")
                     )
                 )
+
+;; remember to wrap call in
+;;   if constexpr (!(std::is_same_v<T, double> || std::is_same_v<T, cdouble>)) {
+;; remember to uncomment <kernel/???.hpp>
