@@ -3,6 +3,7 @@
 (defun MM (string)
   (with-current-buffer (find-file-noselect "/tmp/tmp-work-output")
     (erase-buffer)
+    (setq header-line-format nil)
     (insert (format "%s" string))
     (display-buffer (current-buffer))
     (set-window-point

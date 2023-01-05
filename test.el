@@ -14,6 +14,7 @@
           (let* ((filename (eval filename-symbol))
                  (buffer (find-buffer-visiting filename))
                  (file-missing (not (file-exists-p filename))))
+            ;; (M "----") (M
             (cond ((and buffer file-missing)  ;; kill buffers on missing files
                    (progn
                      (set-buffer-modified-p nil)

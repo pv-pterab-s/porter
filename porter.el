@@ -56,12 +56,13 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
     (setq is-global-flags (mapcar #'(lambda (param) (string-match "global" param)) (g--c-defun-params-types)))
 
     (setq read-or-write-flags
-          (mapcar* #'(lambda (param-type is-global)
+          (mapcar* #'(lambda (param-type is-global param-name)
                        (cond ((not is-global) "not-accessor")
-                             (should-ask-questions (g--ask-if-param-is-read-or-write param-type))
+                             (should-ask-questions (g--ask-if-param-is-read-or-write
+                                                    (concat param-type " " param-name)))
                              (t "write-only")
                              ))
-                   (g--c-defun-params-types) is-global-flags))
+                   (g--c-defun-params-types) is-global-flags (g--c-defun-params-names)))
 
     (setq oneapi-param-types
           (mapcar* #'(lambda (param-type read-or-write)
@@ -98,8 +99,7 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
                                   ("get_local_id" . "it.get_local_id")
                                   ("barrier([^)]*)" . "it.barrier()")
                                   ("get_local_size" . "g.get_local_range")
-                                  ("global\\(.*\\) \\([^=\\n]+\\)[^\\n]*=" . "\\1 \\2=")
-                                  ("NDRange" . "AAA")))
+                                  ("global\\(.*\\) \\([^=\\n]+\\)[^\\n]*=" . "\\1 \\2=")))
       (g--zip search-regexps replacements))
 
      "\n"
@@ -111,11 +111,11 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
   )
 
 
-(defun g--functor-string (point-in-kernel buffer)
+(defun g--functor-string (point-in-kernel buffer &optional should-ask-questions)
   (interactive (list (point) (current-buffer)))
   (with-current-buffer buffer
     (goto-char point-in-kernel)
-    (g--functor-string-helper (called-interactively-p 'any))))
+    (g--functor-string-helper should-ask-questions)))
 
 
 (defun g--driver-accessor-decls (point-on-invocation buffer)
@@ -254,7 +254,6 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
                 #'(lambda (arrayfire-dir)
                     (interactive "Denter arrayfire clone directory: ")
                     (g-harness-arrayfire arrayfire-dir)
-                    ;; (setq header-line-format "goto next step with C-c 2")
                     (message (concat "harnessed " g--arrayfire-dir " function " g--function-to-port
                                      " goto step C-c 2"))
                     )
@@ -266,55 +265,53 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
                     (let ((driver-shell (g--oneapi-driver-shell (find-file-noselect g--opencl-driver-fn))))
                       (kill-new (MM driver-shell))
                       )
-                    (setq header-line-format "generated driver-shell. goto next step C-c 3")
+                    (setq header-line-format "(2) generated driver shell")
                     (set-face-attribute 'header-line nil
                                         :background "DarkGreen"
                                         :foreground "White")
                     ))
-                    ;; (global-set-key (kbd "C-c h")
-                    ;;                 #'(lambda ()
-                    ;;                     (interactive)
-                    ;;                     (let ((driver-shell (g--oneapi-driver-shell (find-file-noselect g--opencl-driver-fn))))
-                    ;;                       (kill-new (MM driver-shell))
-
 
 (global-set-key (kbd "C-c 3")
                 #'(lambda () (interactive)
                     (find-file g--oneapi-driver-fn)
-                    (setq header-line-format "paste driver-shell into oneapi file (use C-y). next step C-c 4")
+                    (setq header-line-format "(3) paste driver-shell into oneapi file (use C-y)")
                     (set-face-attribute 'header-line nil
                                         :background "DarkGreen"
                                         :foreground "White")
                     )
                 )
 
+(global-set-key (kbd "C-c h") #'(lambda (pt buffer)
+                                  (interactive (list (point) (current-buffer)))
+                                  (kill-new (MM (g--functor-string pt buffer t)))
+                                  ))
 (global-set-key (kbd "C-c 4")
                 #'(lambda () (interactive)
                     (find-file g--opencl-kernel-fn)
-                    (setq header-line-format "gen functor from point in opencl kernel (use C-c h) C-c 5")
+                    (setq header-line-format "(4) gen functor from point in opencl kernel (use C-c h)")
                     (set-face-attribute 'header-line nil
                                         :background "DarkGreen"
                                         :foreground "White")
-                    (global-set-key (kbd "C-c h") #'(lambda (pt buffer)
-                                                      (interactive (list (point) (current-buffer)))
-                                                      (kill-new (MM (g--functor-string pt buffer)))
-                                                      ))
                     )
                 )
 
 (global-set-key (kbd "C-c 5")
                 #'(lambda () (interactive)
                     (find-file g--oneapi-driver-fn)
-                    (setq header-line-format "paste functor. (use C-y) next step C-c 6")
+                    (setq header-line-format "(5) paste functor. (use C-y) ")
                     (set-face-attribute 'header-line nil
                                         :background "DarkGreen"
                                         :foreground "White")
                     )
                 )
 
+(global-set-key (kbd "C-c j") #'(lambda (pt buffer)
+                                  (interactive (list (point) (current-buffer)))
+                                  (kill-new (MM (g--driver-string pt buffer)))
+                                  ))
 (global-set-key (kbd "C-c 6")
                 #'(lambda () (interactive)
-                    (setq header-line-format "gen driver from shell (use C-c h). replace old. (build?)")
+                    (setq header-line-format "(6) create new driver from inside old (use C-c j) and insert")
                     (set-face-attribute 'header-line nil
                                         :background "DarkGreen"
                                         :foreground "White")
