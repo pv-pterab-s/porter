@@ -5,10 +5,14 @@
 (defun g-harness-arrayfire (arrayfire-dir)
   (interactive "Denter arrayfire clone directory: ")
   (setq g--arrayfire-dir arrayfire-dir)
-  (setq g--function-to-port (replace-regexp-in-string
-                             "-af$" ""
-                             (file-name-nondirectory (directory-file-name
-                                                      g--arrayfire-dir))))
+  ;; (setq g--function-to-port (replace-regexp-in-string
+  ;;                            "-af$" ""
+  ;;                            (file-name-nondirectory (directory-file-name
+  ;;                                                     g--arrayfire-dir))))
+
+  (setq g--function-to-port (read-string "function name to port? "))
+  (M (concat "!!! "  g--function-to-port))
+
   (setq g--opencl-kernel-fn (concat g--arrayfire-dir "/src/backend/opencl/kernel/" g--function-to-port ".cl"))
   (setq g--opencl-driver-fn (concat g--arrayfire-dir "/src/backend/opencl/kernel/" g--function-to-port ".hpp"))
   (setq g--oneapi-driver-fn (replace-regexp-in-string "opencl/" "oneapi/" g--opencl-driver-fn))

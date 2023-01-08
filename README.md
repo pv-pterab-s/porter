@@ -1,10 +1,18 @@
-1. harness the arrayfire directory
-  - copies opencl driver to oneapi driver
-2. C-c 1 switch to opencl kernel
-3. move cursor to inside a kernel
-4. C-c 2 make a functor
-5. C-c 3 switch to oneapi driver
-6. paste the functor after the write_accessor definition
-7. move the cursor to a driver function
-8. C-c 4 make a driver function
-9. paste driver function above old driver function. delete old one
+# Contents
+
+This repo is a toolset for porting and verifying function ports. Elisp in
+`porter.el` provides a semi-autonomous methodology. `verify.sh` drives a
+best-effort check of functions supposedly ported.
+
+
+# Project Status
+
+Current PR's dropped into one branch `batch-1`. The list is currently:
+
+1. `select`
+2. `tile`
+3. `lookup`
+4. `meanshift`
+5. `gradient`
+
+Previously merged standalones... `convolve unwrap wrap`.
