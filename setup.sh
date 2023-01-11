@@ -1,25 +1,26 @@
 #!/bin/bash
 # -*- compile-command: "./setup.sh"; -*-
 # puts work environment at clean state. errs before erasing
-set -e
-
-mkdir -p out
+set -ex
 
 function setup_af_branch {
     local BRANCH="$1"
     if [ -d out/$BRANCH-af ]; then echo "out/$BRANCH-af exists!"; exit 1; fi
 
+    mkdir -p out
     git clone gh:pv-pterab-s/arrayfire out/$BRANCH-af
-    (cd out/$BRANCH-af && git checkout branch-1)
+    (cd out/$BRANCH-af && git fetch --all && git checkout $BRANCH)
     PATCH_FILE="$(readlink -f patch-device_manager.diff)"
     (cd out/$BRANCH-af/src/backend/oneapi && patch device_manager.cpp < $PATCH_FILE)
 
     if [ ! -d out/$BRANCH-af/build ]; then
-        cd out/$BRANCH-af
-        mkdir -p build
-        cd build
-        CXX=icpx CC=icx cmake .. -DCMAKE_CXX_FLAGS="-w" -DAF_BUILD_UNIFIED=OFF -DAF_BUILD_CPU=ON -DAF_BUILD_CUDA=OFF -DAF_BUILD_OPENCL=OFF -DAF_BUILD_ONEAPI=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_PREFIX_PATH=/usr/lib/x86_64-linux-gnu/cmake
-        make -j22
+       (
+           cd out/$BRANCH-af
+           mkdir -p build
+           cd build
+           CXX=icpx CC=icx cmake .. -DCMAKE_CXX_FLAGS="-w" -DAF_BUILD_UNIFIED=OFF -DAF_BUILD_CPU=ON -DAF_BUILD_CUDA=OFF -DAF_BUILD_OPENCL=OFF -DAF_BUILD_ONEAPI=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_PREFIX_PATH=/usr/lib/x86_64-linux-gnu/cmake
+           make -j22
+       )
     fi
 }
 
