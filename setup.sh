@@ -1,7 +1,8 @@
 #!/bin/bash
 # -*- compile-command: "./setup.sh"; -*-
 # puts work environment at clean state. errs before erasing
-set -ex
+set -e
+source config.sh
 
 function setup_af_branch {
     local BRANCH="$1"
@@ -43,12 +44,13 @@ function setup_standalone {
 
 function setup_env_for_function {
     local FUNCTION_NAME="$1"
+    if [[ " $NEW_FUNCTIONS " =~ " $FUNCTION_NAME " ]]; then echo "function already ported!"; exit 1; fi
     if [ ! -d "out/$FUNCTION_NAME" ]; then git clone gh:pv-pterab-s/new-dev out/$FUNCTION_NAME; fi
 
     rm -f out/$FUNCTION_NAME/lookup.hpp
     ln -sf $(readlink -f out/batch-1-af/src/backend/oneapi/kernel)/$FUNCTION_NAME.hpp $(readlink -f out/$FUNCTION_NAME)/$FUNCTION_NAME.hpp
 
-    cat > out/af/.dir-locals.el <<EOF
+    cat > out/batch-1-af/.dir-locals.el <<EOF
 ((c++-mode . ((compile-command . "cd $(readlink -f out/$FUNCTION_NAME) && rm -rf out && make && ./out/main"))))
 EOF
 }
@@ -64,7 +66,6 @@ function main {
     setup_af_branch batch-1
 
     # all standalones (linked over)
-    source config.sh
     for I in $NEW_FUNCTIONS; do setup_standalone $I; done
 }
-main
+main $*
