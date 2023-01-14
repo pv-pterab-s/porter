@@ -4,7 +4,7 @@ set -e
 source config.sh
 cd out/batch-1-af/build
 
-EXPECTED_SHA="e9699229"
+EXPECTED_SHA="ab89e328"
 CURRENT_SHA="$(git rev-parse --short HEAD)"
 if ! [ "$CURRENT_SHA" = "$EXPECTED_SHA" ]; then
     echo "out/batch-1-af is expected to be at sha $EXPECTED_SHA (but at $CURRENT_SHA)"
@@ -20,3 +20,5 @@ echo "!!! meanshift"
 ./test/meanshift_oneapi --gtest_filter="-*GFOR*"
 echo "!!! gradient"
 ./test/gradient_oneapi --gtest_filter="Grad/0.Grad0:Grad/0.Grad1:Grad/0.Grad2:Grad/2.Grad0:Grad/2.Grad1:Grad/2.Grad2:Grad.CPP"
+echo "!!! rotate"
+./test/rotate_oneapi --gtest_filter="Rotate/0.*"
