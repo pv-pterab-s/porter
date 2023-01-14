@@ -19,7 +19,7 @@ function setup_af_branch {
            cd out/$BRANCH-af
            mkdir -p build
            cd build
-           CXX=icpx CC=icx cmake .. -DCMAKE_CXX_FLAGS="-w" -DAF_BUILD_UNIFIED=OFF -DAF_BUILD_CPU=ON -DAF_BUILD_CUDA=OFF -DAF_BUILD_OPENCL=OFF -DAF_BUILD_ONEAPI=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_PREFIX_PATH=/usr/lib/x86_64-linux-gnu/cmake
+           CXX=icpx CC=icx cmake .. -DCMAKE_CXX_FLAGS="-w" -DAF_BUILD_UNIFIED=OFF -DAF_BUILD_CPU=ON -DAF_BUILD_CUDA=OFF -DAF_BUILD_OPENCL=OFF -DAF_BUILD_ONEAPI=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_PREFIX_PATH=/usr/lib/x86_64-linux-gnu/cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
            make -j22
        )
     fi
