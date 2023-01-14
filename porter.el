@@ -249,9 +249,43 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
       )))
 
 
+(defun gdp-add-functor-param (param-type-and-name)   ;; just assumes in functor params
+  ;; TODO no error checking and not generalized
+  (interactive "s")
+  (save-excursion
+    (goto-char (search-forward-regexp ")"))
+    (backward-char)
+    (insert (concat ", " param-type-and-name))
+    (goto-char (search-forward-regexp "{"))
+    (backward-char)
+    (let ((param-name (replace-regexp-in-string ".* \\([^ ]+ *\\)$" "\\1" param-type-and-name)))
+      (insert (format ", %s_(%s) " param-name param-name))  ;; constructor set private shorthand
+      (goto-char (search-forward-regexp "const {"))   ;; should be beginning of operator
+      (mark-defun)
+      (message "%s" (point)) (message "%s" (mark))
+      (replace-regexp-in-region param-name
+                                (concat param-name "_")
+                                (point) (mark))
+      (goto-char (search-forward-regexp "^ *};"))   ;; TODO regexp might not work
+      (forward-line -1) (end-of-line) (newline)
+      (insert (concat param-type-and-name "_;")))))
+
+
+
 (global-set-key (kbd "M-1") #'(lambda () (interactive) (find-file g--opencl-driver-fn)))
 (global-set-key (kbd "M-2") #'(lambda () (interactive) (find-file g--opencl-kernel-fn)))
 (global-set-key (kbd "M-3") #'(lambda () (interactive) (find-file g--oneapi-driver-fn)))
+(global-set-key (kbd "M-4") #'(lambda () (interactive)
+                                (find-file
+                                 (concat "~/porter/out/" g--function-to-port "/"))))
+
+;; TODO
+;; (global-set-key (kbd "M-0") #'(lambda () (interactive)
+;;                                 (find-file
+;;                                  (concat g--arrayfire-dir "/src/backend/opencl/kernel/" g--function-to-port ".cl")
+;;                                  (concat "~/porter/out/" g--function-to-port "/"))))
+
+
 
 
 (global-set-key (kbd "C-c 1")
