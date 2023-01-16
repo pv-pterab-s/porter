@@ -166,7 +166,7 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
     string
     (list '("using +cl::[^;]*;" . "")
           '("^ *auto +.*=[^;]*;" . "")
-          '("[^;]*emplace_back[^;]*;" . "")
+          '("[^ .]+\\.emplace_back[^;]*;" . "")
           '("Param\\( +\\)" . "Param<T>\\1")
           '("using +std::vector *;" . "")
           '(" *std::array[^;]*;" . "")
@@ -174,8 +174,8 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
           '(" *vector[^;]*;" .  "")
           '("CL_DEBUG_FINISH" . "ONEAPI_DEBUG_FINISH")
           '(
-            "NDRange +\\([^ ]+\\) *(\\([^,]+\\),\\([^,]+\\),\\([^,]+\\))[;]*;" .
-            "auto \\1 = sycl::range(\\2,\\3);"
+            "\\(cl::\\)?NDRange +\\([^ ]+\\) *(\\([^,]+\\),\\([^,]+\\),\\([^,]+\\))[;]*;" .
+            "auto \\2 = sycl::range(\\3,\\4);"
             )
           )))
   )
