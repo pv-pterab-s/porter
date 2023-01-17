@@ -4,7 +4,7 @@ set -e
 source config.sh
 cd out/batch-1-af/build
 
-EXPECTED_SHA="50bb902c"
+EXPECTED_SHA="857a1a4f"
 CURRENT_SHA="$(git rev-parse --short HEAD)"
 if ! [ "$CURRENT_SHA" = "$EXPECTED_SHA" ]; then
     echo "out/batch-1-af is expected to be at sha $EXPECTED_SHA (but at $CURRENT_SHA)"
@@ -26,3 +26,5 @@ echo "!!! resize"
 ./test/resize_oneapi --gtest_filter="Resize/0*:Resize/2*"
 echo "!!! approx1"
 ./test/approx1_oneapi --gtest_filter="Approx1/0.*"
+echo "!!! approx2"
+./test/approx2_oneapi --gtest_filter="Approx2/0.*"
