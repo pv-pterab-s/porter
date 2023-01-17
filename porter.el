@@ -177,6 +177,10 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
             "\\(cl::\\)?NDRange +\\([^ ]+\\) *(\\([^,]+\\),\\([^,]+\\),\\([^,]+\\))[;]*;" .
             "auto \\2 = sycl::range(\\3,\\4);"
             )
+          '(
+            "\\(cl::\\)?NDRange +\\([^ ]+\\) *(\\([^,]+\\),\\([^,]+\\))[;]*;" .
+            "auto \\2 = sycl::range(\\3,\\4);"
+            )
           )))
   )
 
