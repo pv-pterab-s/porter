@@ -47,10 +47,13 @@ function setup_env_for_function {
     if [[ " $NEW_FUNCTIONS " =~ " $FUNCTION_NAME " ]]; then echo "function already ported!"; exit 1; fi
     if [ ! -d "out/$FUNCTION_NAME" ]; then git clone gh:pv-pterab-s/new-dev out/$FUNCTION_NAME; fi
 
-    rm -f out/$FUNCTION_NAME/lookup.hpp
+    rm -f out/$FUNCTION_NAME/resize.hpp
     ln -sf $(readlink -f out/batch-1-af/src/backend/oneapi/kernel)/$FUNCTION_NAME.hpp $(readlink -f out/$FUNCTION_NAME)/$FUNCTION_NAME.hpp
 
     cat > out/batch-1-af/.dir-locals.el <<EOF
+((c++-mode . ((compile-command . "cd $(readlink -f out/$FUNCTION_NAME) && rm -rf out && make && ./out/main"))))
+EOF
+    cat > out/$FUNCTION_NAME/.dir-locals.el <<EOF
 ((c++-mode . ((compile-command . "cd $(readlink -f out/$FUNCTION_NAME) && rm -rf out && make && ./out/main"))))
 EOF
 }
