@@ -2,16 +2,10 @@
 (gallagher-eval-buffer "g-utils.el")
 
 
-(defun g-harness-arrayfire (arrayfire-dir)
-  (interactive "Denter arrayfire clone directory: ")
+(defun g-harness-arrayfire (arrayfire-dir function-to-port)
+  (interactive "Denter arrayfire clone directory: \nMfunction name to port")
   (setq g--arrayfire-dir arrayfire-dir)
-  ;; (setq g--function-to-port (replace-regexp-in-string
-  ;;                            "-af$" ""
-  ;;                            (file-name-nondirectory (directory-file-name
-  ;;                                                     g--arrayfire-dir))))
-
-  (setq g--function-to-port (read-string "function name to port? "))
-  (M (concat "!!! "  g--function-to-port))
+  (setq g--function-to-port function-to-port)
 
   (setq g--opencl-kernel-fn (concat g--arrayfire-dir "/src/backend/opencl/kernel/" g--function-to-port ".cl"))
   (setq g--opencl-driver-fn (concat g--arrayfire-dir "/src/backend/opencl/kernel/" g--function-to-port ".hpp"))
@@ -173,13 +167,17 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
           '(" *std::vector[^;]*;" .  "")
           '(" *vector[^;]*;" .  "")
           '("CL_DEBUG_FINISH" . "ONEAPI_DEBUG_FINISH")
-          '(
+          '(  ;; search replace range with three parameters
             "\\(cl::\\)?NDRange +\\([^ ]+\\) *(\\([^,]+\\),\\([^,]+\\),\\([^,]+\\))[;]*;" .
-            "auto \\2 = sycl::range(\\3,\\4);"
+            "auto \\2 = sycl::range(\\3,\\4,\\5);"
             )
-          '(
+          '(  ;; search replace range with two parameters
             "\\(cl::\\)?NDRange +\\([^ ]+\\) *(\\([^,]+\\),\\([^,]+\\))[;]*;" .
             "auto \\2 = sycl::range(\\3,\\4);"
+            )
+          '(  ;; search replace range with one parameter
+            "\\(cl::\\)?NDRange +\\([^ ]+\\) *(\\([^,]+\\))[;]*;" .
+            "auto \\2 = sycl::range(\\3);"
             )
           )))
   )
@@ -292,14 +290,14 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
 
 
 
-(global-set-key (kbd "C-c 1")
-                #'(lambda (arrayfire-dir)
-                    (interactive "Denter arrayfire clone directory: ")
-                    (g-harness-arrayfire arrayfire-dir)
-                    (message (concat "harnessed " g--arrayfire-dir " function " g--function-to-port
-                                     " goto step C-c 2"))
-                    )
-                )
+(global-set-key (kbd "C-c 1") 'g-harness-arrayfire)
+                ;; #'(lambda (arrayfire-dir)
+                ;;     ;; (interactive "Denter arrayfire clone directory: ")
+                ;;     (g-harness-arrayfire arrayfire-dir)
+                ;;     (message (concat "harnessed " g--arrayfire-dir " function " g--function-to-port
+                ;;                      " goto step C-c 2"))
+                ;;     )
+                ;; )
 
 (global-set-key (kbd "C-c 2")
                 #'(lambda () (interactive)
