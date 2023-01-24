@@ -4,13 +4,18 @@ set -e
 source config.sh
 cd out/batch-1-af/build
 
-EXPECTED_SHA="5dc2ae2c"
+EXPECTED_SHA="5a7e73fc"
 CURRENT_SHA="$(git rev-parse --short HEAD)"
 if ! [ "$CURRENT_SHA" = "$EXPECTED_SHA" ]; then
     echo "out/batch-1-af is expected to be at sha $EXPECTED_SHA (but at $CURRENT_SHA)"
     exit 1
 fi
 
+# tests that should pass on master (after float/double fix patch)
+echo "!!! convolve"
+./test/convolve_oneapi --gtest_filter="Convolve/2.Vector:Convolve/2.Rectangle:Cuboid:Convolve/2.Vector_Many2One:Convolve/2.Rectangle_Many2One:Cuboid_Many2One:Convolve/2.Vector_Many2Many:Convolve/2.Rectangle_Many2Many:Cuboid_Many2Many:Convolve/2.Vector_One2Many:Convolve/2.Rectangle_One2Many:Cuboid_One2Many:Convolve/2.Same_Vector:Convolve/2.Same_Rectangle:Cuboid:Convolve/2.Same_Vector_Many2One:Convolve/2.Same_Rectangle_Many2One:Cuboid_Many2One:Convolve/2.Same_Vector_Many2Many:Convolve/2.Same_Rectangle_Many2Many:Cuboid_Many2Many:Convolve/2.Same_Vector_One2Many:Convolve/2.Same_Rectangle_One2Many:Cuboid_One2Many"
+
+# new functions incoming from batch-1 branch
 echo "!!! select skipped"
 echo "!!! tile"
 ./test/tile_oneapi --gtest_filter="Tile/0.*:-Tile/0.Tile111:Tile/0.Tile3D111:Tile/0.Tile2D111"
