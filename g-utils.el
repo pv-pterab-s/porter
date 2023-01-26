@@ -147,12 +147,24 @@
     (save-excursion
       (goto-char (point-min))
       (re-search-forward "class")  ;; find first class
-      ;; (re-search-forward "{") (backward-char) (forward-sexp)
       (re-search-forward ":[^{]*{ *}")   ;; constructor has empty body
       (g--c-defun-params)
       )
     )
   )
+
+(defun g--functor-body (buffer)   ;; assume only on of these in the buffer
+  (interactive (list (current-buffer)))
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (re-search-forward "operator()")   ;; find first operator method
+      (re-search-forward "{") (backward-char) (forward-sexp)
+      (g--c-defun-body)
+      )
+    )
+  )
+
 
 
 (defun g--first-match (regexp string)

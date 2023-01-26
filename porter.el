@@ -358,6 +358,24 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
                     )
                 )
 
+(global-set-key (kbd "C-c k")
+                #'(lambda () (interactive)
+                    (save-excursion
+                      (beginning-of-defun)
+                      (previous-line)
+                      (insert (concat "#include \"/home/gpryor/porter/out/" g--function-to-port "/io.hpp\"\n"))
+                      (insert (concat "#include \"/home/gpryor/porter/out/" g--function-to-port "/msg.hpp\"\n"))
+                      (insert "\n"))
+                    (insert (concat "OPEN_W(\"/tmp/" g--function-to-port "\");\n"))
+                    (insert
+                     (string-join (mapcar
+                                   #'(lambda (name) (concat "WRITE(" name ");"))
+                                   (g--c-defun-params-names))
+                                  " "))
+                    ))
+
+
+
 ;; remember to wrap call in
 ;;   if constexpr (!(std::is_same_v<T, double> || std::is_same_v<T, cdouble>)) {
 ;; remember to uncomment <kernel/???.hpp>
