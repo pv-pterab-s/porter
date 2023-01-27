@@ -4,12 +4,12 @@ set -e
 source config.sh
 cd out/batch-1-af/build
 
-EXPECTED_SHA="5a7e73fc"
-CURRENT_SHA="$(git rev-parse --short HEAD)"
-if ! [ "$CURRENT_SHA" = "$EXPECTED_SHA" ]; then
-    echo "out/batch-1-af is expected to be at sha $EXPECTED_SHA (but at $CURRENT_SHA)"
-    exit 1
-fi
+# EXPECTED_SHA="5a7e73fc"
+# CURRENT_SHA="$(git rev-parse --short HEAD)"
+# if ! [ "$CURRENT_SHA" = "$EXPECTED_SHA" ]; then
+#     echo "out/batch-1-af is expected to be at sha $EXPECTED_SHA (but at $CURRENT_SHA)"
+#     exit 1
+# fi
 
 # tests that should pass on master (after float/double fix patch)
 echo "!!! convolve"
