@@ -23,14 +23,111 @@
     (delete-matching-lines ".*include.*kernel_headers.*" (point-min) (point-max))
     (goto-char (point-min))
     (re-search-forward "namespace kernel {")
+    ;; only insert this if the kernel really needs it
+    ;; using local_accessor = sycl::accessor<T, 1, sycl::access::mode::read_write,
+    ;;                                       sycl::access::target::local>;
     (insert "\n\ntemplate<typename T>
-using local_accessor = sycl::accessor<T, 1, sycl::access::mode::read_write,
-                                      sycl::access::target::local>;
 template<typename T>
 using read_accessor = sycl::accessor<T, 1, sycl::access::mode::read>;
 template<typename T>
 using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
     (buffer-string)))
+
+
+
+
+(defun g--ask-if-accessor-is-read-or-write (param)
+  ;; (if (called-interactively-p) (cl-return "read-only"))
+  (cadr
+   (read-multiple-choice
+    (format "is the argument \"%s\" read-only or write-only?" param)
+    '((?r "read-only" "The accessor should be read-only.")
+      (?w "write-only" "The accessor should be write-only.")))))
+
+
+(defun g-make-read-write-accessors (buffer)
+  (interactive (list (current-buffer)))
+
+  (with-current-buffer buffer
+    (goto-char (point-min))
+    (save-excursion
+      (if (re-search-forward "namespace kernel {" nil t)
+          ;; (re-search-forward "namespace kernel {")
+          (insert "\n\n
+template<typename T>
+using read_accessor = sycl::accessor<T, 1, sycl::access::mode::read>;
+template<typename T>
+using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")))
+
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward "\\(sycl::accessor<[^>]*> +[^,;]+\\)[,;]" nil t)
+        (let (read-or-write-flag accessor-decl beg-match end-match new-type-string)
+          (setq beg-match (match-beginning 1))
+          (setq end-match (match-end 1))
+          (setq accessor-decl (substring-no-properties (match-string 1)))
+          (setq read-or-write-flag (g--ask-if-accessor-is-read-or-write accessor-decl))
+          (setq new-type-string
+                (cond
+                 ((string-equal read-or-write-flag "read-only") "read_accessor")
+                 ((string-equal read-or-write-flag "write-only") "write_accessor")
+                 ))
+
+          (delete-region beg-match end-match)
+          (backward-char)
+          (insert
+           (replace-regexp-in-string "\\(<[^>,]+\\),.*>" "\\1>"
+                                     (replace-regexp-in-string "sycl::accessor"
+                                                               new-type-string
+                                                               accessor-decl)))
+          )
+        )
+      )
+
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward "\\(sycl::accessor +\\)\\([_A-Za-z0-9]+\\)\\({[^}]*}\\)" nil t)
+        (set-window-point
+         (get-buffer-window (current-buffer) 'visible)
+         (match-beginning 0))
+        ;; (recenter (/ (1- (window-height)) 2))
+
+        (let (read-or-write-flag
+              (beg-match (match-beginning 0))
+              (end-match (match-end 0))
+              (accessor-decl (concat (match-string 1) (match-string 2)))
+              (var-name (match-string 2))
+              (curly-brace-string (match-string 3))
+              new-type-string)
+
+          (delete-region beg-match end-match)
+
+          (setq read-or-write-flag (g--ask-if-accessor-is-read-or-write accessor-decl))
+
+          (setq new-type-string
+                (cond
+                 ((string-equal read-or-write-flag "read-only") "read_accessor")
+                 ((string-equal read-or-write-flag "write-only") "write_accessor")
+                 ))
+
+          (backward-char)
+          (insert new-type-string)
+          (insert "<T> ")
+          (insert var-name)
+          (insert
+           (replace-regexp-in-string "^\\({[^,]+,[^,]+\\),.*}" "\\1}"
+                                     (replace-regexp-in-string "\n" "" curly-brace-string)))
+          )
+        )
+      )
+    )
+  ) ;; defun
+
+(global-set-key (kbd "C-c r") 'g-make-read-write-accessors)
+
+;; (with-current-buffer (find-file-noselect "/home/gpryor/porter/out/batch-1-af/src/backend/oneapi/kernel/select.hpp")
+;;   (g-make-read-write-accessors (current-buffer))
+;;   )
 
 
 (defun g--ask-if-param-is-read-or-write (param)
