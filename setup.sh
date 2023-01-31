@@ -184,7 +184,6 @@ function main {
             FUNCTION_TO_SETUP="$2"
             setup_standalone $FUNCTION_TO_SETUP
             setup_clone_function $FUNCTION_TO_SETUP
-            harness_function $FUNCTION_TO_SETUP
             ;;
         *)
             cat <<EOF
