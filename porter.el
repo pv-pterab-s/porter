@@ -27,7 +27,6 @@
     ;; using local_accessor = sycl::accessor<T, 1, sycl::access::mode::read_write,
     ;;                                       sycl::access::target::local>;
     (insert "\n\ntemplate<typename T>
-template<typename T>
 using read_accessor = sycl::accessor<T, 1, sycl::access::mode::read>;
 template<typename T>
 using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")
@@ -192,6 +191,7 @@ using write_accessor = sycl::accessor<T, 1, sycl::access::mode::write>;\n\n")))
       (g--replace-list-of-pairs (g--c-defun-body)
                                 '(("get_group_id" . "g.get_group_id")
                                   ("get_local_id" . "it.get_local_id")
+                                  ("get_global_id" . "it.get_global_id")
                                   ("barrier([^)]*)" . "it.barrier()")
                                   ("get_local_size" . "g.get_local_range")
                                   ("global\\(.*\\) \\([^=\\n]+\\)[^\\n]*=" . "\\1 \\2=")))
