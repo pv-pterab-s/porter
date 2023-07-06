@@ -1,4 +1,5 @@
 ;;; -*- lexical-binding: t; my-lisp-to-evaluate: "(gallagher-eval-buffer \"/home/gpryor/porter/test.el\")"; -*-
+(require 'cl)
 (defun M (s) (message "%s" s) s)
 (defun MM (string)
   (with-current-buffer (find-file-noselect "/tmp/tmp-work-output")

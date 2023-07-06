@@ -1,4 +1,6 @@
 ;;; porter.el --- port an opencl function to oneapi within an arrayfire clone -*- lexical-binding: t; my-lisp-to-evaluate: "(gallagher-eval-buffer \"/home/gpryor/porter/test.el\")"; -*-
+(require 'cl)
+
 (gallagher-eval-buffer "g-utils.el")
 
 
